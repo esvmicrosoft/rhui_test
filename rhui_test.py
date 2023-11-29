@@ -23,6 +23,7 @@ def rpm_name():
         return(rpm_name)
     else:
         logging.critical("could not find a specific RHUI package installed, please refer to the documentation and install the apropriate one")
+        logging.critical("Consider using the document listed here to install support for the RHUI repositories".format("https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/troubleshoot-linux-rhui-certificate-issues?tabs=rhel8-eus%2Crhel7-noneus%2Crhel7-rhel-sap-apps%2Crhel8-rhel-sap-apps%2Crhel9-rhel-sap-apps#cause-3-rhui-package-is-missing"))
         exit(1)
 
 def get_pkg_info(package_name):
@@ -60,7 +61,8 @@ def get_pkg_info(package_name):
                 errors += 1
 
     if errors:
-        logging.critical("Critical errors have been found, please correct them and test setup again")
+        logging.critical("Critical errors have been found, consider reinstalling the corresponding RHUI package")
+        logging.critical("follow: https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/troubleshoot-linux-rhui-certificate-issues#cause-2-rhui-certificate-is-missing")
         exit(1)
     else:
         return(hash_info)
@@ -78,6 +80,7 @@ def expiration_time(path):
         result = subprocess.check_call('openssl x509 -in {} -checkend 0 > /dev/null 2>&1 '.format(path),shell=True)
     except subprocess.CalledProcessError:
         logging.critical("Client RHUI Certificate has expired, please update the rhui RPM")
+        logging.critical("Refer to: https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/troubleshoot-linux-rhui-certificate-issues#cause-1-rhui-client-certificate-is-expired")
         exit(1)
     
 
@@ -200,7 +203,7 @@ def connect_to_microsoft_repo(reposconfig):
                 logging.debug("the RC for this {} link is {}".format(url,r.status_code))
 
        if successes == 0:
-           logging.critical("PROBLEM: Cannot communicate with any RHUI server, you must allow at least one")
+           logging.critical("PROBLEM: Cannot communicate with any RHUI server, you must allow at least one of the IP addresses listed here {}".format("https://learn.microsoft.com/en-us/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel9#the-ips-for-the-rhui-content-delivery-servers"))
            sys.exit(1)
 
 def connect_to_rhui_repos(EUS, reposconfig):
@@ -238,11 +241,13 @@ def connect_to_rhui_repos(EUS, reposconfig):
            releasever = fd.readline().strip()
         else:
            logging.critical('Server is using EUS repostories but /etc/yum/vars/releasever file not found, please correct and test again')
+           logging.critical('Refer to: https://learn.microsoft.com/en-us/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo")
            exit(1)
 
     if not EUS:
         if os.path.exists('/etc/yum/vars/releasever'):
             logging.critical('Server is using non-EUS repos and /etc/yum/vars/releasever file found, correct and try again')
+           logging.critical('Refer to: https://learn.microsoft.com/en-us/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo")
             exit(1)
 
         try:
