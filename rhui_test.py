@@ -207,11 +207,8 @@ def connect_to_microsoft_repo(reposconfig):
                 logging.debug("the RC for this {} link is {}".format(url,r.status_code))
 
        if successes == 0:
-           logging.critical("PROBLEM: Cannot communicate with any RHUI server, you must allow at least one of the IP addresses listed here {}".format("https://learn.microsoft.com/en-us/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel9#the-ips-for-the-rhui-content-delivery-servers"))
+           logging.critical("PROBLEM: Cannot communicate with any RHUI server, you must allow at least one of the IP addresses listed here {}".format("https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel9#the-ips-for-the-rhui-content-delivery-servers"))
            sys.exit(1)
-
-
-
 
 def connect_to_rhui_repos(EUS, reposconfig):
 # check if EUS or NON-EUS repos are being used correctly.
