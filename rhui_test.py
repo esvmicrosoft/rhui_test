@@ -8,12 +8,19 @@ import subprocess
 import time
 import sys
 
+try:
+    import ConfigParser as configparser
+except ImportError:
+    import configparser
+
 ###########################################################################################
 # 
 #   Handling whether the RPM exists or not.
 #
 ###########################################################################################
-
+rhui3 = ['13.91.47.76', '40.85.190.91', '52.187.75.218']
+rhui4 = ['52.136.197.163', '20.225.226.182', '52.142.4.99', '20.248.180.252', '20.24.186.80']
+rhuius = ['13.72.186.193', '13.72.14.155', '52.224.249.194']
 
 def rpm_name():
     logging.debug("Entering repo_name()")
@@ -23,7 +30,7 @@ def rpm_name():
         return(rpm_name)
     else:
         logging.critical("could not find a specific RHUI package installed, please refer to the documentation and install the apropriate one")
-        logging.critical("Consider using the following document to install RHUI support https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/troubleshoot-linux-rhui-certificate-issues#cause-3-rhui-package-is-missing")
+        logging.critical("Consider using the following document to install RHUI support https://learn.microsoft.com/troubleshoot/azure/virtual-machines/troubleshoot-linux-rhui-certificate-issues#cause-3-rhui-package-is-missing")
         exit(1)
 
 def get_pkg_info(package_name):
@@ -61,7 +68,7 @@ def get_pkg_info(package_name):
                 errors += 1
 
     if errors:
-        logging.critical("follow {} for information to install the RHUI package".format("https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/troubleshoot-linux-rhui-certificate-issues#cause-2-rhui-certificate-is-missing"))
+        logging.critical("follow {} for information to install the RHUI package".format("https://learn.microsoft.com/troubleshoot/azure/virtual-machines/troubleshoot-linux-rhui-certificate-issues#cause-2-rhui-certificate-is-missing"))
         exit(1)
     else:
         return(hash_info)
@@ -79,7 +86,7 @@ def expiration_time(path):
         result = subprocess.check_call('openssl x509 -in {} -checkend 0 > /dev/null 2>&1 '.format(path),shell=True)
     except subprocess.CalledProcessError:
         logging.critical("Client RHUI Certificate has expired, please update the rhui RPM")
-        logging.critical("Refer to: https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/troubleshoot-linux-rhui-certificate-issues#cause-1-rhui-client-certificate-is-expired")
+        logging.critical("Refer to: https://learn.microsoft.com/troubleshoot/azure/virtual-machines/troubleshoot-linux-rhui-certificate-issues#cause-1-rhui-client-certificate-is-expired")
         exit(1)
     
 
@@ -91,11 +98,6 @@ def check_rhui_repo_file(path):
 # path: Indicates where the rhui repo is stored.
 #
 ###########################################################################################
-    try:
-        import ConfigParser as configparser
-    except ImportError:
-        import configparser
-
     class localParser(configparser.ConfigParser):
 
         def as_dict(self):
@@ -136,7 +138,6 @@ def check_microsoft_repo(reposconfig):
 # Checks whether the rhui-microsoft-azure-* repository exists and tests connectivity to it
     rhuirepo = '^(rhui-)?microsoft.*'
 
-    myreponame = ""
     for repo_name in reposconfig.sections():
         if re.match(rhuirepo, repo_name):
            logging.info("Using Microsoft RHUI repository {}".format(repo_name))
@@ -146,22 +147,25 @@ def check_microsoft_repo(reposconfig):
        try:
            enabled =  int(reposconfig.get(myreponame, 'enabled').strip())
            
-       except NoOptionError:
-           logging.critical("Critical component of the Microsoft Azure RHUI repo not found, consider resinstalling the RHUI Repo")
-           exit(1)
+       except configparser.NoOptionError:
+           # It will get into this section if enabled is not defined in the repo config.
+           # although it is not stated in the manual, enabled seems to be optional and defaults to 1.
+           enabled = 1
        
        if enabled != 1:
            logging.critical('Microsoft RHUI repository not enbaled, please enable it with the following command')
            logging.critical('yum-config-manager --enable {}'.format(repo_name))
            exit(1)
-       
+       else:
+            logging.debug("Server is using {} repositroy and it is enabled".format(repo_name))
+
        if re.match('.*(eus|e4s).*', myreponame):
            return 1
        else:
            return 0
     else:
         logging.critical("The Microsoft RHUI repo not found, this will lead to problems")
-        logging.critical("Follow this document to reinstall the RHUI Repository RPM: {}".format('https://learn.microsoft.com/en-us/azure/virtual-machines/workloads/redhat/redhat-rhui#image-update-behavior'))
+        logging.critical("Follow this document to reinstall the RHUI Repository RPM: {}".format('https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui#image-update-behavior'))
         exit(1)
 
 
@@ -171,6 +175,17 @@ def connect_to_microsoft_repo(reposconfig):
     logging.debug("Entering connect_to_microsoft_repo()")
     rhuirepo = '^rhui-microsoft.*'
     myreponame = ""
+
+    try:
+        import requests
+    except ImportError:
+        logging.critical("'requests' python module not found but it is required for this test script, review your python instalation")
+        exit(1) 
+    try:
+        import socket
+    except ImportError:
+        logging.critical("'socket' python module not found but it is required for this test script, review your python instalation")
+        exit(1) 
 
     for repo_name in reposconfig.sections():
         if re.match(rhuirepo, repo_name):
@@ -183,15 +198,31 @@ def connect_to_microsoft_repo(reposconfig):
        except NoOptionError:
            logging.critical("Critical component of the Microsoft Azure RHUI repo not found, consider resinstalling the RHUI Repo")
            exit(1)
-
-       try:
-           import requests
-       except ImportError:
-           logging.critical("Unable to import required communication modules, review your python instalation")
-           exit(1) 
-       
+      
        successes = 0
        for url in baseurl_info:
+
+           try:
+               url_host = url.split('/')[2]
+               rhui_ip_address = socket.gethostbyname(url_host)
+
+               if rhui_ip_address in rhui3 + rhuius:
+                   warnings = warnings + 1
+                   logging.warning('RHUI server {} points to old infrastructure, refresh RHUI the RHUI package'.format(url_host))
+               elif rhui_ip_address not in rhui4:
+                   logging.critical('RHUI server {} points to an invalid destination, reinstall the RHUI package'.format(url_host))
+                   continue
+               else:
+                   logging.debug('RHUI host {} points to RHUI4 infrastructure'.format(url_host))
+           except Exception as e:
+                logging.warning('Unable to resolve IP address for host {}'.format(url_host))
+                logging.warning('Please make sure your server is able to resolve {} to one of the ip addresses'.format(url_host))
+                rhui_link = 'https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#the-ips-for-the-rhui-content-delivery-servers'
+                logging.critical('listed in this documen {}'.format(rhui_link))
+                continue
+
+
+
            url = url+"/repodata/repomd.xml"
            logging.debug("This is one of links supporting the RHUI infrastructure {}".format(url))
 
@@ -218,6 +249,7 @@ def connect_to_rhui_repos(EUS, reposconfig):
 
     rhuirepo='^(rhui-)?microsoft.*'
     default='.*default.*'
+    #  fixme: Add support for ARM infrastructure
     basearch = 'x86_64'
 
     enabled_repos = []
@@ -245,13 +277,13 @@ def connect_to_rhui_repos(EUS, reposconfig):
            releasever = fd.readline().strip()
         else:
            logging.critical('Server is using EUS repostories but /etc/yum/vars/releasever file not found, please correct and test again')
-           logging.critical('Refer to: https://learn.microsoft.com/en-us/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo')
+           logging.critical('Refer to: https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo')
            exit(1)
 
     if not EUS:
         if os.path.exists('/etc/yum/vars/releasever'):
             logging.critical('Server is using non-EUS repos and /etc/yum/vars/releasever file found, correct and try again')
-            logging.critical('Refer to: https://learn.microsoft.com/en-us/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo')
+            logging.critical('Refer to: https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo')
             exit(1)
 
         try:
