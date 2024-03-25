@@ -30,12 +30,19 @@ class bcolors:
     UNDERLINE = '\033[4m'
 
 
+try:
+    import ConfigParser as configparser
+except ImportError:
+    import configparser
+
 ###########################################################################################
 # 
 #   Handling whether the RPM exists or not.
 #
 ###########################################################################################
-
+rhui3 = ['13.91.47.76', '40.85.190.91', '52.187.75.218']
+rhui4 = ['52.136.197.163', '20.225.226.182', '52.142.4.99', '20.248.180.252', '20.24.186.80']
+rhuius = ['13.72.186.193', '13.72.14.155', '52.224.249.194']
 
 def rpm_name():
     logging.debug('{} Entering repo_name() {}'.format(bcolors.BOLD, bcolors.ENDC))
@@ -46,7 +53,7 @@ def rpm_name():
     else:
         logging.critical('{} could not find a specific RHUI package installed, please refer to the documentation and install the apropriate one {}'.format(bcolors.FAIL, bcolors.ENDC))
         logging.critical('{} Consider using the following document to install RHUI support https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/troubleshoot-linux-rhui-certificate-issues#cause-3-rhui-package-is-missing {}'.format(bcolors.FAIL, bcolors.ENDC))
-        exit(1)
+        exit(1) 
 
 def get_pkg_info(package_name):
     logging.debug('{} Entering get_pkg_info() {}'.format(bcolors.BOLD, bcolors.ENDC))
@@ -142,13 +149,11 @@ def check_rhui_repo_file(path):
 #################################################
 # 
 #################################################
-
 def check_microsoft_repo(reposconfig):
     logging.debug('{}Entering microsoft_repo(){}'.format(bcolors.BOLD, bcolors.ENDC))
 # Checks whether the rhui-microsoft-azure-* repository exists and tests connectivity to it
     rhuirepo = '^(rhui-)?microsoft.*'
 
-    myreponame = ""
     for repo_name in reposconfig.sections():
         if re.match(rhuirepo, repo_name):
            logging.info('{}Using Microsoft RHUI repository {}{}'.format(bcolors.OKGREEN, repo_name, bcolors.ENDC))
@@ -165,7 +170,9 @@ def check_microsoft_repo(reposconfig):
            logging.critical('{}Microsoft RHUI repository not enbaled, please enable it with the following command{}'.format(bcolors.FAIL, bcolors.ENDC))
            logging.critical('{}yum-config-manager --enable {}{}'.format(bcolors.FAIL, repo_name, bcolors.ENDC))
            exit(1)
-       
+       else:
+            logging.debug("Server is using {} repositroy and it is enabled".format(repo_name))
+
        if re.match('.*(eus|e4s).*', myreponame):
            return 1
        else:
@@ -178,7 +185,6 @@ def check_microsoft_repo(reposconfig):
 
 def connect_to_microsoft_repo(reposconfig):
 # downloads repomd.xml from Microsoft RHUI Repo
-    
     logging.debug('{}Entering connect_to_microsoft_repo(){}'.format(bcolors.BOLD, bcolors.ENDC))
     rhuirepo = '^rhui-microsoft.*'
     myreponame = ""
@@ -228,10 +234,9 @@ def connect_to_microsoft_repo(reposconfig):
                 logging.warning('{}listed in this document {}{}'.format(bcolors.WARNING, rhui_link, bcolors.ENDC))
                 continue
 
-
-
            url = url+'/repodata/repomd.xml'
            logging.debug('{}This is one of links supporting the RHUI infrastructure {}{}'.format(bcolors.BOLD, url, bcolors.ENDC))
+
 
            headers = {'content-type': 'application/json'}
            try:
@@ -257,6 +262,7 @@ def connect_to_rhui_repos(EUS, reposconfig):
 
     rhuirepo='^(rhui-)?microsoft.*'
     default='.*default.*'
+    #  fixme: Add support for ARM infrastructure
     basearch = 'x86_64'
 
     enabled_repos = []
@@ -291,6 +297,7 @@ def connect_to_rhui_repos(EUS, reposconfig):
         if os.path.exists('/etc/yum/vars/releasever'):
             logging.critical('{} Server is using non-EUS repos and /etc/yum/vars/releasever file found, correct and try again'.format(bcolors.FAIL, bcolors.ENDC))
             logging.critical('{} Refer to: https://learn.microsoft.com/en-us/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo'.format(bcolors.FAIL, bcolors.ENDC))
+
             exit(1)
 
         try:
