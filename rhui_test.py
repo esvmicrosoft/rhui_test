@@ -245,6 +245,8 @@ def connect_to_microsoft_repo(reposconfig):
                logging.warning('{}PROBLEM: Unable to reach RHUI server, https port is blocked for {}{}'.format(bcolors.WARNING, url, bcolors.ENDC))
            except requests.exceptions.SSLError:
                logging.warning('{}PROBLEM: MITM proxy misconfiguration. Proxy cannot intercept certs for {}{}'.format(bcolors.WARNING, url, bcolors.ENDC))
+           except Exception as e:
+               logging.warning('{}PROBLEM: Unable to reach RHUI server, https port is blocked for {}{}'.format(bcolors.WARNING, url, bcolors.ENDC))
            else:
                 successes += 1
                 logging.debug('{}The RC for this {} link is {}{}'.format(bcolors.OKGREEN, url, r.status_code, bcolors.ENDC))
