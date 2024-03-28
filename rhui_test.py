@@ -292,13 +292,13 @@ def connect_to_rhui_repos(EUS, reposconfig):
            releasever = fd.readline().strip()
         else:
            logging.critical('{} Server is using EUS repostories but /etc/yum/vars/releasever file not found, please correct and test again{}'.format(bcolors.FAIL, bcolors.ENDC))
-           logging.critical('{} Refer to: https://learn.microsoft.com/en-us/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo'.format(bcolors.FAIL, bcolors.ENDC))
+           logging.critical('{} Refer to: https://learn.microsoft.com/en-us/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo{}'.format(bcolors.FAIL, bcolors.ENDC))
            exit(1)
 
     if not EUS:
         if os.path.exists('/etc/yum/vars/releasever'):
             logging.critical('{} Server is using non-EUS repos and /etc/yum/vars/releasever file found, correct and try again'.format(bcolors.FAIL, bcolors.ENDC))
-            logging.critical('{} Refer to: https://learn.microsoft.com/en-us/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo'.format(bcolors.FAIL, bcolors.ENDC))
+            logging.critical('{} Refer to: https://learn.microsoft.com/en-us/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo{}'.format(bcolors.FAIL, bcolors.ENDC))
 
             exit(1)
 
