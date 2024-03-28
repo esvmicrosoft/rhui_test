@@ -139,7 +139,7 @@ def check_rhui_repo_file(path):
             reposconfig.add_section('[default]')
             reposconfig.read(path)
 
-        logging.debug(reposconfig.sections())
+        logging.debug('{} {} {}'.format(bcolors.BOLD, str(reposconfig.sections()), bcolors.ENDC))
         return reposconfig
 
     except configparser.ParsingError:
@@ -171,7 +171,7 @@ def check_microsoft_repo(reposconfig):
            logging.critical('{}yum-config-manager --enable {}{}'.format(bcolors.FAIL, repo_name, bcolors.ENDC))
            exit(1)
        else:
-            logging.debug("Server is using {} repositroy and it is enabled".format(repo_name))
+            logging.debug('{}Server is using {} repositroy and it is enabled{}'.format(bcolors.BOLD, repo_name, bcolors.ENDC))
 
        if re.match('.*(eus|e4s).*', myreponame):
            return 1
@@ -292,13 +292,13 @@ def connect_to_rhui_repos(EUS, reposconfig):
            releasever = fd.readline().strip()
         else:
            logging.critical('{} Server is using EUS repostories but /etc/yum/vars/releasever file not found, please correct and test again{}'.format(bcolors.FAIL, bcolors.ENDC))
-           logging.critical('{} Refer to: https://learn.microsoft.com/en-us/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo'.format(bcolors.FAIL, bcolors.ENDC))
+           logging.critical('{} Refer to: https://learn.microsoft.com/en-us/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo{}'.format(bcolors.FAIL, bcolors.ENDC))
            exit(1)
 
     if not EUS:
         if os.path.exists('/etc/yum/vars/releasever'):
             logging.critical('{} Server is using non-EUS repos and /etc/yum/vars/releasever file found, correct and try again'.format(bcolors.FAIL, bcolors.ENDC))
-            logging.critical('{} Refer to: https://learn.microsoft.com/en-us/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo'.format(bcolors.FAIL, bcolors.ENDC))
+            logging.critical('{} Refer to: https://learn.microsoft.com/en-us/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo{}'.format(bcolors.FAIL, bcolors.ENDC))
 
             exit(1)
 
@@ -383,3 +383,5 @@ reposconfig                              = check_rhui_repo_file(data['repofile']
 eus = check_microsoft_repo(reposconfig)
 connect_to_microsoft_repo(reposconfig)
 connect_to_rhui_repos(eus, reposconfig)
+logging.critical('{}All communication tests to the RHUI infrastructure have passed, if problems persisit, remove third party repositories and test again{}'.format(bcolors.OKGREEN, bcolors.ENDC))
+logging.critical('{}The RHUI repository configuration file is {}, move any other configuration file to a temporary location and test again{}'.format(bcolors.OKGREEN, data['repofile'], bcolors.ENDC))
