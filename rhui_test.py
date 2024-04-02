@@ -153,6 +153,7 @@ def check_microsoft_repo(reposconfig):
     logging.debug('{}Entering microsoft_repo(){}'.format(bcolors.BOLD, bcolors.ENDC))
 # Checks whether the rhui-microsoft-azure-* repository exists and tests connectivity to it
     rhuirepo = '^(rhui-)?microsoft.*'
+    myreponame = ''
 
     for repo_name in reposconfig.sections():
         if re.match(rhuirepo, repo_name):
