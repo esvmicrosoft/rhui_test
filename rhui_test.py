@@ -177,11 +177,6 @@ def check_microsoft_repo(reposconfig):
        else:
             logging.debug('{}Server is using {} repository and it is enabled{}'.format(bcolors.BOLD, repo_name, bcolors.ENDC))
 
-       if re.match('.*(eus|e4s|sap).*', myreponame):
-           return 1
-       else:
-           return 0
-
     else:
         logging.critical('{}The Microsoft RHUI repo not found, this will lead to problems{}'.format(bcolors.FAIL, bcolors.ENDC))
         logging.critical('{}Follow this document to reinstall the RHUI Repository RPM: {}{}'.format(bcolors.FAIL, 'https://learn.microsoft.com/en-us/azure/virtual-machines/workloads/redhat/redhat-rhui#image-update-behavior', bcolors.ENDC))
@@ -261,23 +256,26 @@ def connect_to_microsoft_repo(reposconfig):
            logging.critical('{}PROBLEM: Cannot communicate with any RHUI server, you must allow at least one of the IP addresses listed here {}{}'.format(bcolors.FAIL, error_link, bcolors.ENDC))
            sys.exit(1)
 
-def connect_to_rhui_repos(EUS, reposconfig):
+def connect_to_rhui_repos(reposconfig):
 # check if EUS or NON-EUS repos are being used correctly.
 
     logging.debug('{}Entering connect_to_rhui_repos(){}'.format(bcolors.BOLD, bcolors.ENDC))
     import requests
 
-    rhuirepo='^(rhui-)?microsoft.*'
-    default='.*default.*'
+    EUS = 0
+    rhuirepo = '^(rhui-)?microsoft.*'
+    eusrepo  = '.*-eus-.*'
+    default= '.*default.*'
     #  fixme: Add support for ARM infrastructure
-    basearch = 'x86_64'
 
     enabled_repos = []
     for repo_name in reposconfig.sections():
-       if not re.match(rhuirepo, repo_name) and not re.match(default, repo_name):
+       if not (re.match(rhuirepo, repo_name) or re.match(default, repo_name)):
            try:
                if reposconfig.get(repo_name, 'enabled').strip() == '1': 
                    logging.info('{} Repo {} enabled{}'.format(bcolors.OKGREEN, repo_name, bcolors.ENDC))
+                   if re.match(eusrepo, repo_name):
+                       EUS = 1
                    enabled_repos.append(repo_name) 
                else:
                    logging.debug('{}{} repo not enabled{}'.format(bcolors.BOLD, repo_name, bcolors.ENDC))
@@ -290,6 +288,22 @@ def connect_to_rhui_repos(EUS, reposconfig):
         exit(1)
 
     releasever=""
+
+    try:
+        uname = os.uname()
+    except:
+        logging.critical('{} Unknown error{}'.format(bcolors.FAIL, bcolors.ENDC))
+        exit(1)    
+
+    try:
+        basearch = uname.machine
+    except AttributeError:
+        basearch = uname[-1]
+
+    try:
+        baserelease = uname.release
+    except AttributeError:
+        baserelease = uname[2]
 
     if EUS:
         if os.path.exists('/etc/yum/vars/releasever'):
@@ -307,21 +321,9 @@ def connect_to_rhui_repos(EUS, reposconfig):
 
             exit(1)
 
-        try:
-            uname = os.uname()
-        except:
-            logging.critical('{} Unknown error{}'.format(bcolors.FAIL, bcolors.ENDC))
-            exit(1)    
-
-        try:
-            baserelease = uname.release
-        except AttributeError:
-            baserelease = uname[2]
-
         releasever  = re.sub(r'^.*el([0-9][0-9]*).*',r'\1',baserelease)
         if releasever == '7':
             releasever = '7Server'
-
             
 
     for myreponame in enabled_repos:
@@ -385,9 +387,9 @@ for package_name in rpm_names():
     data                                     = get_pkg_info(package_name)
     expiration_time(data['clientcert'])
     reposconfig                              = check_rhui_repo_file(data['repofile'])
-    eus = check_microsoft_repo(reposconfig)
+    check_microsoft_repo(reposconfig)
     connect_to_microsoft_repo(reposconfig)
-    connect_to_rhui_repos(eus, reposconfig)
+    connect_to_rhui_repos(reposconfig)
 
 logging.critical('{}All communication tests to the RHUI infrastructure have passed, if problems persisit, remove third party repositories and test again{}'.format(bcolors.OKGREEN, bcolors.ENDC))
 logging.critical('{}The RHUI repository configuration file is {}, move any other configuration file to a temporary location and test again{}'.format(bcolors.OKGREEN, data['repofile'], bcolors.ENDC))
