@@ -44,12 +44,15 @@ rhui3 = ['13.91.47.76', '40.85.190.91', '52.187.75.218']
 rhui4 = ['52.136.197.163', '20.225.226.182', '52.142.4.99', '20.248.180.252', '20.24.186.80']
 rhuius = ['13.72.186.193', '13.72.14.155', '52.224.249.194']
 
-def rpm_name():
+def rpm_names():
     logging.debug('{} Entering repo_name() {}'.format(bcolors.BOLD, bcolors.ENDC))
     result = subprocess.Popen('rpm -qa | grep rhui', shell=True, stdout=subprocess.PIPE)
-    rpm_name = result.stdout.read().decode('utf-8').strip()
-    if rpm_name:
-        return(rpm_name)
+    rpm_names = result.stdout.readlines()
+    rpm_names = [ rpm.decode('utf-8').strip() for rpm in rpm_names ]
+    if rpm_names:
+        for rpm in rpm_names:
+            logging.debug('{}Server has this RHUI pkg: {}{}'.format(bcolors.BOLD, rpm, bcolors.ENDC))
+        return(rpm_names)
     else:
         logging.critical('{} could not find a specific RHUI package installed, please refer to the documentation and install the apropriate one {}'.format(bcolors.FAIL, bcolors.ENDC))
         logging.critical('{} Consider using the following document to install RHUI support https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/troubleshoot-linux-rhui-certificate-issues#cause-3-rhui-package-is-missing {}'.format(bcolors.FAIL, bcolors.ENDC))
@@ -174,10 +177,11 @@ def check_microsoft_repo(reposconfig):
        else:
             logging.debug('{}Server is using {} repositroy and it is enabled{}'.format(bcolors.BOLD, repo_name, bcolors.ENDC))
 
-       if re.match('.*(eus|e4s).*', myreponame):
+       if re.match('.*(eus|e4s|sap).*', myreponame):
            return 1
        else:
            return 0
+
     else:
         logging.critical('{}The Microsoft RHUI repo not found, this will lead to problems{}'.format(bcolors.FAIL, bcolors.ENDC))
         logging.critical('{}Follow this document to reinstall the RHUI Repository RPM: {}{}'.format(bcolors.FAIL, 'https://learn.microsoft.com/en-us/azure/virtual-machines/workloads/redhat/redhat-rhui#image-update-behavior', bcolors.ENDC))
@@ -377,12 +381,13 @@ else:
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 
-package_name                             = rpm_name()
-data                                     = get_pkg_info(package_name)
-expiration_time(data['clientcert'])
-reposconfig                              = check_rhui_repo_file(data['repofile'])
-eus = check_microsoft_repo(reposconfig)
-connect_to_microsoft_repo(reposconfig)
-connect_to_rhui_repos(eus, reposconfig)
+for package_name in rpm_names():
+    data                                     = get_pkg_info(package_name)
+    expiration_time(data['clientcert'])
+    reposconfig                              = check_rhui_repo_file(data['repofile'])
+    eus = check_microsoft_repo(reposconfig)
+    connect_to_microsoft_repo(reposconfig)
+    connect_to_rhui_repos(eus, reposconfig)
+
 logging.critical('{}All communication tests to the RHUI infrastructure have passed, if problems persisit, remove third party repositories and test again{}'.format(bcolors.OKGREEN, bcolors.ENDC))
 logging.critical('{}The RHUI repository configuration file is {}, move any other configuration file to a temporary location and test again{}'.format(bcolors.OKGREEN, data['repofile'], bcolors.ENDC))
