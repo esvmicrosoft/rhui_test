@@ -175,7 +175,7 @@ def check_microsoft_repo(reposconfig):
            logging.critical('{}yum-config-manager --enable {}{}'.format(bcolors.FAIL, repo_name, bcolors.ENDC))
            exit(1)
        else:
-            logging.debug('{}Server is using {} repositroy and it is enabled{}'.format(bcolors.BOLD, repo_name, bcolors.ENDC))
+            logging.debug('{}Server is using {} repository and it is enabled{}'.format(bcolors.BOLD, repo_name, bcolors.ENDC))
 
        if re.match('.*(eus|e4s|sap).*', myreponame):
            return 1
