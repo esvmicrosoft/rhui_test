@@ -54,7 +54,7 @@ def rpm_names():
             logging.debug('{}Server has this RHUI pkg: {}{}'.format(bcolors.BOLD, rpm, bcolors.ENDC))
         return(rpm_names)
     else:
-        logging.critical('{} could not find a specific RHUI package installed, please refer to the documentation and install the apropriate one {}'.format(bcolors.FAIL, bcolors.ENDC))
+        logging.critical('{} could not find a specific RHUI package installed, please eefer to the documentation and install the apropriate one {}'.format(bcolors.FAIL, bcolors.ENDC))
         logging.critical('{} Consider using the following document to install RHUI support https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/troubleshoot-linux-rhui-certificate-issues#cause-3-rhui-package-is-missing {}'.format(bcolors.FAIL, bcolors.ENDC))
         exit(1) 
 
@@ -98,6 +98,36 @@ def get_pkg_info(package_name):
     else:
         return(hash_info)
 
+def default_policy():
+# returns a boolean whether the default encryption policies are set to default via the /etc/crypto-policies/config file, if it can't test it, the result will be set to true.
+
+    try:
+        uname = os.uname()
+    except:
+        logging.critical('{} Unable to identify OS version{}'.format(bcolors.FAIL, bcolors.ENDC))
+        exit(1)    
+
+    try:
+        baserelease = uname.release
+    except AttributeError:
+        baserelease = uname[2]
+
+    releasever  = re.sub(r'^.*el([0-9][0-9]*).*',r'\1',baserelease)
+
+    # return true for EL7
+    if releasever == '7':
+        return True
+
+    try:
+        fd = open('/etc/crypto-policies/config')
+        policy = fd.readline().strip()
+        if policy != 'DEFAULT':
+            return False
+    except:
+        return True
+
+    return True
+
 def expiration_time(path):
 ###########################################################################################
 # 
@@ -109,11 +139,16 @@ def expiration_time(path):
     logging.debug('{}Checking certificate expiration time{}'.format(bcolors.BOLD, bcolors.ENDC))
     try:
         result = subprocess.check_call('openssl x509 -in {} -checkend 0 > /dev/null 2>&1 '.format(path),shell=True)
+
     except subprocess.CalledProcessError:
-        logging.critical('{}Client RHUI Certificate has expired, please update the rhui RPM'.format(bcolors.FAIL, bcolors.ENDC))
+        logging.critical('{}Client RHUI Certificate has expired, please update the rhui RPM{}'.format(bcolors.FAIL, bcolors.ENDC))
         logging.critical('{}Refer to: https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/troubleshoot-linux-rhui-certificate-issues#cause-1-rhui-client-certificate-is-expired{}'.format(bcolors.FAIL, bcolors.ENDC))
         exit(1)
-    
+
+    if not default_policy():
+        logging.critical('{}Client crypto policies not set to DEFAULT{}'.format(bcolors.FAIL, bcolors.ENDC))
+        logging.critical('{}Refer to: https://learn.microsoft.com/troubleshoot/azure/virtual-machines/linux/troubleshoot-linux-rhui-certificate-issues?tabs=rhel7-eus%2Crhel7-noneus%2Crhel7-rhel-sap-apps%2Crhel8-rhel-sap-apps%2Crhel9-rhel-sap-apps#cause-5-verification-error-in-rhel-version-8-or-9-ca-certificate-key-too-weak{}'.format(bcolors.FAIL, bcolors.ENDC))
+        exit(1) 
 
 def check_rhui_repo_file(path):
     logging.debug('{}Entering check_rhui_repo_file(){}'.format(bcolors.BOLD, bcolors.ENDC))
@@ -292,7 +327,7 @@ def connect_to_rhui_repos(reposconfig):
     try:
         uname = os.uname()
     except:
-        logging.critical('{} Unknown error{}'.format(bcolors.FAIL, bcolors.ENDC))
+        logging.critical('{} Unable to identify OS version{}'.format(bcolors.FAIL, bcolors.ENDC))
         exit(1)    
 
     try:
