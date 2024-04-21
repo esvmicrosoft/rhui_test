@@ -120,7 +120,8 @@ def default_policy():
 
     try:
         fd = open('/etc/crypto-policies/config')
-        policy = fd.readline().strip()
+        policy = subprocess.check_output('/bin/update-crypto-policies --show', shell=True)
+        policy = policy.decode('utf-8').strip()
         if policy != 'DEFAULT':
             return False
     except:
@@ -299,7 +300,7 @@ def connect_to_rhui_repos(reposconfig):
 
     EUS = 0
     rhuirepo = '^(rhui-)?microsoft.*'
-    eusrepo  = '.*-eus-.*'
+    eusrepo  = '.*-(eus|e4s)-.*'
     default= '.*default.*'
     #  fixme: Add support for ARM infrastructure
 
