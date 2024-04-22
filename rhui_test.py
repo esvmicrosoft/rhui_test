@@ -119,7 +119,6 @@ def default_policy():
         return True
 
     try:
-        fd = open('/etc/crypto-policies/config')
         policy = subprocess.check_output('/bin/update-crypto-policies --show', shell=True)
         policy = policy.decode('utf-8').strip()
         if policy != 'DEFAULT':
