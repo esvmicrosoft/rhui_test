@@ -398,6 +398,18 @@ def connect_to_rhui_repos(reposconfig):
             logging.critical('{} PROBLEM: Cannot communicate with any RHUI server, you must allow at least one{}'.format(bcolors.FAIL, bcolors.ENDC))
             sys.exit(1)
 
+######################################################
+# Logging the output of the script into /var/log/rhuicheck.log file
+######################################################
+def start_logging():
+    """This function sets up the logging configuration for the script and writes the log to /var/log/rhuiscript.log"""
+    log_filename = '/var/log/rhuicheck.log'
+    file_handler = logging.FileHandler(filename=log_filename)
+    formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s')
+    file_handler.setFormatter(formatter)
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)
+    root_logger.addHandler(file_handler)
 
 if os.geteuid() != 0:
    logging.critical('{} This script needs to execute with root privileges\nPlease use: sudo {} {}'.format(bcolors.FAIL, sys.argv[0], bcolors.ENDC))
@@ -414,6 +426,7 @@ if args.debug:
     logging.basicConfig(level=logging.DEBUG)
 else:
     logging.basicConfig(level=logging.INFO)
+start_logging()
 
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
