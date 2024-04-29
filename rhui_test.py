@@ -402,7 +402,7 @@ def connect_to_rhui_repos(reposconfig):
 # Logging the output of the script into /var/log/rhuicheck.log file
 ######################################################
 def start_logging():
-    """This function sets up the logging configuration for the script and writes the log to /var/log/rhuiscript.log"""
+    """This function sets up the logging configuration for the script and writes the log to /var/log/rhuicheck.log"""
     log_filename = '/var/log/rhuicheck.log'
     file_handler = logging.FileHandler(filename=log_filename)
     formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s')
