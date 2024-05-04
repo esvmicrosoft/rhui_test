@@ -258,7 +258,7 @@ def connect_to_microsoft_repo(reposconfig):
                    warnings = warnings + 1
                    logging.warning('{}RHUI server {} points to old infrastructure, refresh RHUI the RHUI package{}'.format(bcolors.WARNING, url_host, bcolors.ENDC))
                elif rhui_ip_address not in rhui4:
-                   logging.critical('{}RHUI server {} points to an invalid destination, reinstall the RHUI package{}'.format(bcolors.FAIL, url_host, bcolors.ENDC))
+                   logging.critical('{}RHUI server {} points to an invalid destination, validate /etc/hosts file for any static RHUI IPs, reinstall the RHUI package{}'.format(bcolors.FAIL, url_host, bcolors.ENDC))
                    continue
                else:
                    logging.debug('{}RHUI host {} points to RHUI4 infrastructure{}'.format(bcolors.OKGREEN, url_host, bcolors.ENDC))
