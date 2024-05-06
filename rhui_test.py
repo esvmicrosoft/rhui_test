@@ -35,16 +35,14 @@ try:
 except ImportError:
     import configparser
 
-###########################################################################################
-# 
-#   Handling whether the RPM exists or not.
-#
-###########################################################################################
 rhui3 = ['13.91.47.76', '40.85.190.91', '52.187.75.218']
 rhui4 = ['52.136.197.163', '20.225.226.182', '52.142.4.99', '20.248.180.252', '20.24.186.80']
 rhuius = ['13.72.186.193', '13.72.14.155', '52.224.249.194']
 
 def rpm_names():
+    """
+    Identifies the RHUI repositories installed in the server and returns a list of RHUI rpms installed in the server.
+    """
     logging.debug('{} Entering repo_name() {}'.format(bcolors.BOLD, bcolors.ENDC))
     result = subprocess.Popen('rpm -qa | grep rhui', shell=True, stdout=subprocess.PIPE)
     rpm_names = result.stdout.readlines()
@@ -99,7 +97,7 @@ def get_pkg_info(package_name):
         return(hash_info)
 
 def default_policy():
-# returns a boolean whether the default encryption policies are set to default via the /etc/crypto-policies/config file, if it can't test it, the result will be set to true.
+    """"Returns a boolean whether the default encryption policies are set to default via the /etc/crypto-policies/config file, if it can't test it, the result will be set to true."""
 
     try:
         uname = os.uname()
@@ -129,12 +127,9 @@ def default_policy():
     return True
 
 def expiration_time(path):
-###########################################################################################
-# 
-# Checks whether client certificate has expired yet or not.
-#
-###########################################################################################
-
+    """ 
+    Checks whether client certificate has expired yet or not.
+    """
     logging.debug('{} Entering expiration_time(){}'.format(bcolors.BOLD, bcolors.ENDC))
     logging.debug('{}Checking certificate expiration time{}'.format(bcolors.BOLD, bcolors.ENDC))
     try:
@@ -151,13 +146,11 @@ def expiration_time(path):
         exit(1) 
 
 def check_rhui_repo_file(path):
+    """ 
+    Handling the consistency of the Red Hat repositories
+    path: Indicates where the rhui repo is stored.
+    """   
     logging.debug('{}Entering check_rhui_repo_file(){}'.format(bcolors.BOLD, bcolors.ENDC))
-###########################################################################################
-# 
-# Handling the consistency of the Red Hat repositories
-# path: Indicates where the rhui repo is stored.
-#
-###########################################################################################
     class localParser(configparser.ConfigParser):
 
         def as_dict(self):
@@ -184,12 +177,10 @@ def check_rhui_repo_file(path):
         logging.critical('{}{} does not follow standard REPO config format, reconsider reinstall RHUI rpm and try again{}'.format(bcolors.FAIL, path, bcolors.ENDC))
         exit(1)
 
-#################################################
-# 
-#################################################
+
 def check_microsoft_repo(reposconfig):
+    """ Checks whether the rhui-microsoft-azure-* repository exists and tests connectivity to it"""
     logging.debug('{}Entering microsoft_repo(){}'.format(bcolors.BOLD, bcolors.ENDC))
-# Checks whether the rhui-microsoft-azure-* repository exists and tests connectivity to it
     rhuirepo = '^(rhui-)?microsoft.*'
     myreponame = ''
 
@@ -219,7 +210,7 @@ def check_microsoft_repo(reposconfig):
 
 
 def connect_to_microsoft_repo(reposconfig):
-# downloads repomd.xml from Microsoft RHUI Repo
+    """downloads repomd.xml from Microsoft RHUI Repo"""
     logging.debug('{}Entering connect_to_microsoft_repo(){}'.format(bcolors.BOLD, bcolors.ENDC))
     rhuirepo = '^rhui-microsoft.*'
     myreponame = ""
@@ -292,8 +283,7 @@ def connect_to_microsoft_repo(reposconfig):
            sys.exit(1)
 
 def connect_to_rhui_repos(reposconfig):
-# check if EUS or NON-EUS repos are being used correctly.
-
+   """ check if EUS or NON-EUS repos are being used correctly."""
     logging.debug('{}Entering connect_to_rhui_repos(){}'.format(bcolors.BOLD, bcolors.ENDC))
     import requests
 
@@ -301,7 +291,6 @@ def connect_to_rhui_repos(reposconfig):
     rhuirepo = '^(rhui-)?microsoft.*'
     eusrepo  = '.*-(eus|e4s)-.*'
     default= '.*default.*'
-    #  fixme: Add support for ARM infrastructure
 
     enabled_repos = []
     for repo_name in reposconfig.sections():
