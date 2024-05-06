@@ -283,7 +283,7 @@ def connect_to_microsoft_repo(reposconfig):
            sys.exit(1)
 
 def connect_to_rhui_repos(reposconfig):
-   """ check if EUS or NON-EUS repos are being used correctly."""
+    """ check if EUS or NON-EUS repos are being used correctly."""
     logging.debug('{}Entering connect_to_rhui_repos(){}'.format(bcolors.BOLD, bcolors.ENDC))
     import requests
 
