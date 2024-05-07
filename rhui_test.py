@@ -10,13 +10,20 @@ import sys
 rhui3 = ['13.91.47.76', '40.85.190.91', '52.187.75.218']
 rhui4 = ['52.136.197.163', '20.225.226.182', '52.142.4.99', '20.248.180.252', '20.24.186.80']
 rhuius = ['13.72.186.193', '13.72.14.155', '52.224.249.194']
-
+proxies = dict()
 
 try:
     import ConfigParser as configparser
 except ImportError:
     import configparser
 
+class localParser(configparser.ConfigParser):
+    def as_dict(self):
+        d = dict(self.sections)
+        for k in d:
+            d[k] = dict(self._defaults, **d[k])
+            d[k].pop('__name__', None)
+        return d
 
 class bcolors:
     HEADER = '\033[95m'
@@ -29,11 +36,6 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
-
-try:
-    import ConfigParser as configparser
-except ImportError:
-    import configparser
 
 rhui3 = ['13.91.47.76', '40.85.190.91', '52.187.75.218']
 rhui4 = ['52.136.197.163', '20.225.226.182', '52.142.4.99', '20.248.180.252', '20.24.186.80']
@@ -91,14 +93,14 @@ def get_pkg_info(package_name):
                 errors += 1
 
     if errors:
-        logging.critical('{}follow {} for information to install the RHUI package{}'.format(bcolors.FAIL,"https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/troubleshoot-linux-rhui-certificate-issues#cause-2-rhui-certificate-is-missing", bcolors.ENDC))
+        data_link = "https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/troubleshoot-linux-rhui-certificate-issues#cause-2-rhui-certificate-is-missing"
+        logging.critical('{}follow {} for information to install the RHUI package{}'.format(bcolors.FAIL,data_link, bcolors.ENDC))
         exit(1)
     else:
         return(hash_info)
 
 def default_policy():
     """"Returns a boolean whether the default encryption policies are set to default via the /etc/crypto-policies/config file, if it can't test it, the result will be set to true."""
-
     try:
         uname = os.uname()
     except:
@@ -145,20 +147,27 @@ def expiration_time(path):
         logging.critical('{}Refer to: https://learn.microsoft.com/troubleshoot/azure/virtual-machines/linux/troubleshoot-linux-rhui-certificate-issues?tabs=rhel7-eus%2Crhel7-noneus%2Crhel7-rhel-sap-apps%2Crhel8-rhel-sap-apps%2Crhel9-rhel-sap-apps#cause-5-verification-error-in-rhel-version-8-or-9-ca-certificate-key-too-weak{}'.format(bcolors.FAIL, bcolors.ENDC))
         exit(1) 
 
+def read_yum_dnf_conf():
+    """Read /etc/yum.conf or /etc/dnf/dnf.conf searching for proxy information"""
+    logging.debug('{}Entering read_yum_dnf_conf() {}'.format(bcolors.BOLD, bcolors.ENDC))
+
+    yumdnfdotconf = localParser(allow_no_value=True, strict=False)
+    try:
+        with open('/etc/yum.conf') as stream:
+            yumdnfdotconf.read_string('[default]\n' + stream.read())
+    except Exception as e:
+        e.add_note('{}Problems reading /etc/yum.conf, on RHEL8+ it is a symbolic link to /etc/dnf/dnf.conf{}'.format(bcoloros.FAIL, bcolors.ENDC))
+        raise
+    else:
+        return yumdnfdotconf
+
+        
 def check_rhui_repo_file(path):
     """ 
     Handling the consistency of the Red Hat repositories
     path: Indicates where the rhui repo is stored.
     """   
     logging.debug('{}Entering check_rhui_repo_file(){}'.format(bcolors.BOLD, bcolors.ENDC))
-    class localParser(configparser.ConfigParser):
-
-        def as_dict(self):
-            d = dict(self.sections)
-            for k in d:
-                d[k] = dict(self._defaults, **d[k])
-                d[k].pop('__name__', None)
-            return d
 
     logging.debug('{}RHUI repo file is {}{}'.format(bcolors.BOLD, path, bcolors.ENDC))
     try:
