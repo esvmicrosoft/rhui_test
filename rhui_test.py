@@ -13,9 +13,9 @@ rhuius = ['13.72.186.193', '13.72.14.155', '52.224.249.194']
 proxies = dict()
 
 try:
-    import ConfigParser as configparser
-except ImportError:
     import configparser
+except ImportError:
+    import ConfigParser as configparser
 
 class localParser(configparser.ConfigParser):
     def as_dict(self):
@@ -36,10 +36,6 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
-
-rhui3 = ['13.91.47.76', '40.85.190.91', '52.187.75.218']
-rhui4 = ['52.136.197.163', '20.225.226.182', '52.142.4.99', '20.248.180.252', '20.24.186.80']
-rhuius = ['13.72.186.193', '13.72.14.155', '52.224.249.194']
 
 def rpm_names():
     """
@@ -223,6 +219,8 @@ def connect_to_microsoft_repo(reposconfig):
     logging.debug('{}Entering connect_to_microsoft_repo(){}'.format(bcolors.BOLD, bcolors.ENDC))
     rhuirepo = '^rhui-microsoft.*'
     myreponame = ""
+    warnings = 0
+    rhui4_repo = 0
 
     try:
         import requests
@@ -253,20 +251,25 @@ def connect_to_microsoft_repo(reposconfig):
            try:
                url_host = url.split('/')[2]
                rhui_ip_address = socket.gethostbyname(url_host)
-
-               if rhui_ip_address in rhui3 + rhuius:
+    
+               if rhui_ip_address  in rhui4:
+                   logging.debug('{}RHUI host {} points to RHUI4 infrastructure{}'.format(bcolors.OKGREEN, url_host, bcolors.ENDC))
+                   rhui4_repo = 1
+               elif rhui_ip_address in rhui3 + rhuius:
+                   reinstall_link = 'https://learn.microsoft.com/troubleshoot/azure/virtual-machines/linux/troubleshoot-linux-rhui-certificate-issues?tabs=rhel7-eus%2Crhel7-noneus%2Crhel7-rhel-sap-apps%2Crhel8-rhel-sap-apps%2Crhel9-rhel-sap-apps#solution-2-reinstall-the-eus-non-eus-or-sap-rhui-package'
+                   logging.error('{}RHUI server {} points to decommissioned infrastructure, reinstall the RHUI package{}'.format(bcolors.FAIL, url_host, bcolors.ENDC))
+                   logging.error('{}for more detailed information, use: {}{}'.format(bcolors.FAIL, reinstall_link, bcolors.ENDC))
                    warnings = warnings + 1
-                   logging.warning('{}RHUI server {} points to old infrastructure, refresh RHUI the RHUI package{}'.format(bcolors.WARNING, url_host, bcolors.ENDC))
-               elif rhui_ip_address not in rhui4:
-                   logging.critical('{}RHUI server {} points to an invalid destination, validate /etc/hosts file for any static RHUI IPs, reinstall the RHUI package{}'.format(bcolors.FAIL, url_host, bcolors.ENDC))
                    continue
                else:
-                   logging.debug('{}RHUI host {} points to RHUI4 infrastructure{}'.format(bcolors.OKGREEN, url_host, bcolors.ENDC))
+                   logging.critical('{}RHUI server {} points to an invalid destination, validate /etc/hosts file for any static RHUI IPs, reinstall the RHUI package{}'.format(bcolors.FAIL, url_host, bcolors.ENDC))
+                   continue
            except Exception as e:
                 logging.warning('{}Unable to resolve IP address for host {}{}'.format(bcolors.WARNING, url_host, bcolors.ENDC))
                 logging.warning('{}Please make sure your server is able to resolve {} to one of the ip addresses{}'.format(bcolors.WARNING, url_host, bcolors.ENDC))
                 rhui_link = 'https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#the-ips-for-the-rhui-content-delivery-servers'
                 logging.warning('{}listed in this document {}{}'.format(bcolors.WARNING, rhui_link, bcolors.ENDC))
+                logging.warning(e)
                 continue
 
            url = url+'/repodata/repomd.xml'
@@ -366,6 +369,7 @@ def connect_to_rhui_repos(reposconfig):
             logging.critical('{} baseurl of {} not found, consider reinstalling the corresponding RHUI repo{}'.format(bcolors.FAIL, myreponame, bcolors.ENDC))
             exit(1)
 
+        successes = 0
         for url in baseurl_info:
 
            url = url+"/repodata/repomd.xml"
@@ -380,7 +384,6 @@ def connect_to_rhui_repos(reposconfig):
                logging.critical('{} Client certificate and/or client key attribute not found for {}, testing connectivity w/o certificates{}'.format(bcolors.FAIL, myreponame, bcolors.ENDC))
                cert=()
 
-           successes = 0
            try:
                r = requests.get(url, headers=headers, cert=cert, timeout=5)
                successes += 1
