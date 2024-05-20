@@ -287,22 +287,25 @@ def connect_to_microsoft_repo(reposconfig):
     
                if rhui_ip_address  in rhui4:
                    logging.debug('{}RHUI host {} points to RHUI4 infrastructure{}'.format(bcolors.OKGREEN, url_host, bcolors.ENDC))
+
                elif rhui_ip_address in rhui3 + rhuius:
                    reinstall_link = 'https://learn.microsoft.com/troubleshoot/azure/virtual-machines/linux/troubleshoot-linux-rhui-certificate-issues?tabs=rhel7-eus%2Crhel7-noneus%2Crhel7-rhel-sap-apps%2Crhel8-rhel-sap-apps%2Crhel9-rhel-sap-apps#solution-2-reinstall-the-eus-non-eus-or-sap-rhui-package'
                    logging.error('{}RHUI server {} points to decommissioned infrastructure, reinstall the RHUI package{}'.format(bcolors.FAIL, url_host, bcolors.ENDC))
                    logging.error('{}for more detailed information, use: {}{}'.format(bcolors.FAIL, reinstall_link, bcolors.ENDC))
+
                    bad_hosts.append(url_host)
+
                    warnings = warnings + 1
                    continue
                else:
                    logging.critical('{}RHUI server {} points to an invalid destination, validate /etc/hosts file for any static RHUI IPs, reinstall the RHUI package{}'.format(bcolors.FAIL, url_host, bcolors.ENDC))
-                   rhui4_repo = 1
                    continue
            except Exception as e:
                 logging.warning('{}Unable to resolve IP address for host {}{}'.format(bcolors.WARNING, url_host, bcolors.ENDC))
                 logging.warning('{}Please make sure your server is able to resolve {} to one of the ip addresses{}'.format(bcolors.WARNING, url_host, bcolors.ENDC))
                 rhui_link = 'https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#the-ips-for-the-rhui-content-delivery-servers'
                 logging.warning('{}listed in this document {}{}'.format(bcolors.WARNING, rhui_link, bcolors.ENDC))
+                logging.warning(e)
                 continue
 
            url = url+'/repodata/repomd.xml'
@@ -403,6 +406,7 @@ def connect_to_rhui_repos(reposconfig):
             exit(1)
 
         urlregex = '[^:]*://([^/]*)/.*'
+
         successes = 0
         for url in baseurl_info:
            host_match = re.match(urlregex, url)
