@@ -173,7 +173,8 @@ def get_proxies(config):
     ''' gets the proxy from a configparser object pointd by the proxy variable if defined in the configuration file '''
     proxy_info = dict()
 
-    scheme_exp = r'^[^:]*:'
+    proxy_regex = '^[^:]*://(([^:]*)(:([^@]*)){0,1}@){0,1}.*'
+
     for key in ['proxy', 'proxy_user', 'proxy_password']:
         try:
             value = config.get('main', key)
@@ -190,10 +191,10 @@ def get_proxies(config):
     if myproxy:
         ''' Get the scheme used in a proxy for example http from http://proxy.com/.
             Have to remove the last : as it is not part of the scheme.            '''
-        scheme_extract = re.match(scheme_exp, myproxy)
+        proxy_info = re.match(proxy_regex, myproxy)
         scheme = scheme_extract.group(0)[:-1]
         proxy_info['scheme'] = scheme
-        logging.warning('{} Found proxy information in the config files, make sure connectivity works thru the proxy {}'.format(bcolors.BOLD, myproxy, scheme, bcolors.ENDC))
+        logging.warning('{} Found proxy information in the config files, make sure connectivity works thru the proxy {}'.format(bcolors.BOLD, bcolors.ENDC))
     else:
         return False
 
@@ -202,7 +203,6 @@ myproxy='https://user:password@host:port/'
 myproxy='https://host:port/'
 myproxy='https://host/'
 myproxy='https://user@host/'
-proxy_regex = '^[^:]*://(([^:]*)(:([^@]*)){0,1}@){0,1}.*'
 proxy_match = re.match(proxy_regex, myproxy)
 i=0
 x = list()
