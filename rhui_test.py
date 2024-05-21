@@ -171,26 +171,50 @@ def read_yum_dnf_conf():
 
 def get_proxies(config):
     ''' gets the proxy from a configparser object pointd by the proxy variable if defined in the configuration file '''
+    proxy_info = dict()
 
     scheme_exp = r'^[^:]*:'
-    try:
-        myproxy = config.get('main','proxy')
-    except configparser.NoOptionError: 
-        return False
-    except Exception as e:
-        logging.error('{}Problems handling the parser object{}'.format(bcolors.FAIL, bcolors.ENDC))
-        raise
-    else:
-        extract_proxy = re.match(scheme_exp, myproxy)
+    for key in ['proxy', 'proxy_user', 'proxy_password']:
+        try:
+            value = config.get('main', key)
 
-    if extract_proxy:
+        except configparser.NoOptionError: 
+            continue
+        except Exception as e:
+            logging.error('{}Problems handling the parser object{}'.format(bcolors.FAIL, bcolors.ENDC))
+            raise
+        else:
+            proxy_info[key] = value
+
+    myproxy = proxy_info['proxy']
+    if myproxy:
         ''' Get the scheme used in a proxy for example http from http://proxy.com/.
             Have to remove the last : as it is not part of the scheme.            '''
-        logging.debug('{} Found a proxy in /etc/[yum|dnf].conf {} {}'.format(bcolors.BOLD, myproxy, bcolors.ENDC))
-        scheme = extract_proxy.group(0)[:-1]
-        return (scheme, myproxy)
+        scheme_extract = re.match(scheme_exp, myproxy)
+        scheme = scheme_extract.group(0)[:-1]
+        proxy_info['scheme'] = scheme
+        logging.warning('{} Found proxy information in the config files, make sure connectivity works thru the proxy {}'.format(bcolors.BOLD, myproxy, scheme, bcolors.ENDC))
     else:
         return False
+
+
+myproxy='https://user:password@host:port/'
+myproxy='https://host:port/'
+myproxy='https://host/'
+myproxy='https://user@host/'
+proxy_regex = '^[^:]*://(([^:]*)(:([^@]*)){0,1}@){0,1}.*'
+proxy_match = re.match(proxy_regex, myproxy)
+i=0
+x = list()
+while proxy_match.group(i):
+    x.append(proxy_match.group(i))
+    i=i+1
+
+x
+['https://user:password@host:port/', 'user:password@', 'user', ':password', 'password']
+['https://user@host/', 'user@', 'user']
+
+
 
         
 def check_rhui_repo_file(path):
