@@ -173,7 +173,7 @@ def get_proxies(config):
     ''' gets the proxy from a configparser object pointd by the proxy variable if defined in the configuration file '''
     proxy_info = dict()
 
-    proxy_regex = '^[^:]*://(([^:]*)(:([^@]*)){0,1}@){0,1}.*'
+    proxy_regex = '(^[^:]*):(//)(([^:]*)(:([^@]*)){0,1}@){0,1}.*'
 
     for key in ['proxy', 'proxy_user', 'proxy_password']:
         try:
@@ -187,33 +187,61 @@ def get_proxies(config):
         else:
             proxy_info[key] = value
 
-    myproxy = proxy_info['proxy']
-    if myproxy:
-        ''' Get the scheme used in a proxy for example http from http://proxy.com/.
-            Have to remove the last : as it is not part of the scheme.            '''
-        proxy_info = re.match(proxy_regex, myproxy)
-        scheme = scheme_extract.group(0)[:-1]
-        proxy_info['scheme'] = scheme
-        logging.warning('{} Found proxy information in the config files, make sure connectivity works thru the proxy {}'.format(bcolors.BOLD, bcolors.ENDC))
-    else:
+    try:
+        myproxy = proxy_info['proxy']
+        if myproxy:
+            ''' Get the scheme used in a proxy for example http from http://proxy.com/.
+                Have to remove the last : as it is not part of the scheme.            '''
+            proxy_match = re.match(proxy_regex, myproxy)
+            scheme = proxy_match.group(1)
+            proxy_info['scheme'] = scheme
+        else:
+            return False
+    except KeyError:
         return False
 
+    if proxy_match.group(4) and ('proxy_user' in proxy_info.keys()):
+        logging.warning('{}proxy definition already has a username defined and proxy_user is also defined, there might be conflicts using the proxy, repair{}'.format(bcolors.WARNING, bcolors.ENDC))
 
-myproxy='https://user:password@host:port/'
-myproxy='https://host:port/'
-myproxy='https://host/'
-myproxy='https://user@host/'
-proxy_match = re.match(proxy_regex, myproxy)
-i=0
-x = list()
-while proxy_match.group(i):
-    x.append(proxy_match.group(i))
-    i=i+1
+    if proxy_match.group(6) and ('proxy_password' in proxy_info.keys()):
+        logging.warning('{}proxy definition already has a username and password defined and proxy_password is also defined, there might be conflicts using the proxy, repair{}'.format(bcolors.WARNING, bcolors.ENDC))
 
-x
-['https://user:password@host:port/', 'user:password@', 'user', ':password', 'password']
-['https://user@host/', 'user@', 'user']
+    if ('proxy_password' in proxy_info.keys()) and ('proxy_user' not in proxy_info.keys()):
+        logging.warning('{}proxy_password defined but there is no proxy user, this could be causing problems{}'.format(bcolors.WARNING, bcolors.ENDC))
+        logging.warning('{}ignoring proxy_password{}'.format(bcolors.WARNING, bcolors.ENDC))
 
+    if ('proxy_user' in proxy_info.keys()) and not proxy_match.group(4):
+        ####### need to insert proxy user and passwod in proxy link
+        proxy_prefix = myproxy[:proxy_match.end(2)]
+        proxy_suffix = myproxy[proxy_match.end(2):]
+
+        if ('proxy_password' in proxy_info.keys()) and not proxy_match.group(6):
+            myproxy = '{}{}:{}@{}'.format(proxy_prefix, proxy_info['proxy_user'], proxy_info['proxy_password'], proxy_suffix)
+        else:
+            myproxy = '{}{}@{}'.format(proxy_prefix, proxy_info['proxy_user'], proxy_suffix)
+
+    logging.warning('{} Found proxy information in the config files, make sure connectivity works thru the proxy {}'.format(bcolors.BOLD, bcolors.ENDC))
+    logging.debug('{} value of proxy information {}{}'.format(bcolors.BOLD, myproxy, bcolors.ENDC))
+    return (proxy_info['scheme'], myproxy)
+    
+ 
+
+
+#### myproxy='https://user:password@host:port/'
+#### myproxy='https://host:port/'
+#### myproxy='https://host/'
+#### myproxy='https://user@host/'
+#### proxy_match = re.match(proxy_regex, myproxy)
+#### i=0
+#### x = list()
+#### while proxy_match.group(i):
+####     x.append(proxy_match.group(i))
+####     i=i+1
+#### 
+#### x
+#### ['https://user:password@host:port/', 'user:password@', 'user', ':password', 'password']
+#### ['https://user@host/', 'user@', 'user']
+#### 
 
 
         
