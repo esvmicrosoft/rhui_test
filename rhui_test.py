@@ -8,12 +8,17 @@ import subprocess
 import time
 import sys
 #import urllib.request
+try:
+    import requests
+except ImportError:
+    logging.critical("{}'requests' python module not found but it is required for this test script, review your python instalation{}".format(bcolors.FAIL, bcolors.ENDC))
+    exit(1) 
 
 rhui3 = ['13.91.47.76', '40.85.190.91', '52.187.75.218']
 rhui4 = ['52.136.197.163', '20.225.226.182', '52.142.4.99', '20.248.180.252', '20.24.186.80']
 rhuius = ['13.72.186.193', '13.72.14.155', '52.224.249.194']
-proxies = dict()
-bad_hosts = []
+system_proxy = dict()
+bad_hosts = list()
 
 try:
     import configparser
@@ -39,6 +44,68 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
+def get_host(url):
+    urlregex = '[^:]*://([^/]*)/.*'
+    host_match = re.match(urlregex, url)
+    return host_match.group(1)
+
+def connect_to_host(url, selection, mysection, verify):
+
+    releasever=""
+    try:
+        uname = os.uname()
+    except:
+        logging.critical('{} Unable to identify OS version{}'.format(bcolors.FAIL, bcolors.ENDC))
+        exit(1)    
+
+    try:
+        basearch = uname.machine
+    except AttributeError:
+        basearch = uname[-1]
+
+    try:
+        baserelease = uname.release
+    except AttributeError:
+        baserelease = uname[2]
+
+    releasever  = re.sub(r'^.*el([0-9][0-9]*).*',r'\1',baserelease)
+    if releasever == '7':
+        releasever = '7Server'
+    url = url+"/repodata/repomd.xml"
+    url = url.replace('$releasever',releasever)
+    url = url.replace('$basearch',basearch)
+    logging.debug('{}baseurl for repo {} is {}{}'.format(bcolors.BOLD, mysection, url, bcolors.ENDC))
+
+    headers = {'content-type': 'application/json'}
+    s = requests.Session()
+    local_proxy = get_proxies(selection, mysection)
+
+    cert = ()
+    if verify:
+        try:
+            cert=( selection.get(mysection, 'sslclientcert'), selection.get(mysection, 'sslclientkey') )
+        except:
+            logging.warning('{} Client certificate and/or client key attribute not found for {}, testing connectivity w/o certificates{}'.format(bcolors.WARNING, mysection, bcolors.ENDC))
+            cert=()
+
+    try:
+        r = s.get(url, cert=cert, headers=headers, timeout=5, proxies=local_proxy)
+    except requests.exceptions.Timeout:
+        logging.warning('{}PROBLEM: Unable to reach RHUI server, https port is blocked for {}{}'.format(bcolors.WARNING, url, bcolors.ENDC))
+        return False
+    except requests.exceptions.SSLError:
+        logging.warning('{}PROBLEM: MITM proxy misconfiguration. Proxy cannot intercept certs for {}{}'.format(bcolors.WARNING, url, bcolors.ENDC))
+        return 1
+    except Exception as e:
+        logging.warning('{}PROBLEM: Unable to reach RHUI server, https port is blocked for {}{}'.format(bcolors.WARNING, url, bcolors.ENDC))
+        return False
+    else:
+        if r.status_code == 200:
+            logging.debug('{}The RC for this {} link is {}{}'.format(bcolors.OKGREEN, url, r.status_code, bcolors.ENDC))
+            return True
+        else:
+            logging.warning('{}The RC for this {} link is {}{}'.format(bcolors.WARNING, url, r.status_code, bcolors.ENDC))
+            return False
 
 def rpm_names():
     """
@@ -169,14 +236,15 @@ def read_yum_dnf_conf():
     return yumdnfdotconf
 
 
-def get_proxies(config):
-    ''' gets the proxy from a configparser object pointd by the proxy variable if defined in the configuration file '''
+def get_proxies(parser_object, mysection):
+    ''' gets the proxy from a configparser section object pointd by the proxy variable if defined in the configuration file '''
     proxy_info = dict()
 
-    scheme_exp = r'^[^:]*:'
+    proxy_regex = '(^[^:]*):(//)(([^:]*)(:([^@]*)){0,1}@){0,1}.*'
+
     for key in ['proxy', 'proxy_user', 'proxy_password']:
         try:
-            value = config.get('main', key)
+            value = parser_object.get(mysection, key)
 
         except configparser.NoOptionError: 
             continue
@@ -186,37 +254,44 @@ def get_proxies(config):
         else:
             proxy_info[key] = value
 
-    myproxy = proxy_info['proxy']
-    if myproxy:
-        ''' Get the scheme used in a proxy for example http from http://proxy.com/.
-            Have to remove the last : as it is not part of the scheme.            '''
-        scheme_extract = re.match(scheme_exp, myproxy)
-        scheme = scheme_extract.group(0)[:-1]
-        proxy_info['scheme'] = scheme
-        logging.warning('{} Found proxy information in the config files, make sure connectivity works thru the proxy {}'.format(bcolors.BOLD, myproxy, scheme, bcolors.ENDC))
-    else:
-        return False
+    try:
+        myproxy = proxy_info['proxy']
+        if myproxy:
+            ''' Get the scheme used in a proxy for example http from http://proxy.com/.
+                Have to remove the last : as it is not part of the scheme.            '''
+            proxy_match = re.match(proxy_regex, myproxy)
+            scheme = proxy_match.group(1)
+            proxy_info['scheme'] = scheme
+        else:
+            return system_proxy
+    except KeyError:
+        return system_proxy
 
+    if proxy_match.group(4) and ('proxy_user' in proxy_info.keys()):
+        logging.warning('{}proxy definition already has a username defined and proxy_user is also defined, there might be conflicts using the proxy, repair{}'.format(bcolors.WARNING, bcolors.ENDC))
 
-myproxy='https://user:password@host:port/'
-myproxy='https://host:port/'
-myproxy='https://host/'
-myproxy='https://user@host/'
-proxy_regex = '^[^:]*://(([^:]*)(:([^@]*)){0,1}@){0,1}.*'
-proxy_match = re.match(proxy_regex, myproxy)
-i=0
-x = list()
-while proxy_match.group(i):
-    x.append(proxy_match.group(i))
-    i=i+1
+    if proxy_match.group(6) and ('proxy_password' in proxy_info.keys()):
+        logging.warning('{}proxy definition already has a username and password defined and proxy_password is also defined, there might be conflicts using the proxy, repair{}'.format(bcolors.WARNING, bcolors.ENDC))
 
-x
-['https://user:password@host:port/', 'user:password@', 'user', ':password', 'password']
-['https://user@host/', 'user@', 'user']
+    if ('proxy_password' in proxy_info.keys() and proxy_info['proxy_password'])  and ('proxy_user' not in proxy_info.keys()):
+        logging.warning('{}proxy_password defined but there is no proxy user, this could be causing problems{}'.format(bcolors.WARNING, bcolors.ENDC))
+        logging.warning('{}ignoring proxy_password{}'.format(bcolors.WARNING, bcolors.ENDC))
 
+    if ('proxy_user' in proxy_info.keys() and proxy_info['proxy_user']) and not proxy_match.group(4):
+        ####### need to insert proxy user and passwod in proxy link
+        proxy_prefix = myproxy[:proxy_match.end(2)]
+        proxy_suffix = myproxy[proxy_match.end(2):]
 
+        if ('proxy_password' in proxy_info.keys()) and proxy_info['proxy_password'] and not proxy_match.group(6):
+            myproxy = '{}{}:{}@{}'.format(proxy_prefix, proxy_info['proxy_user'], proxy_info['proxy_password'], proxy_suffix)
+        else:
+            myproxy = '{}{}@{}'.format(proxy_prefix, proxy_info['proxy_user'], proxy_suffix)
 
-        
+    logging.warning('{} Found proxy information in the config files, make sure connectivity works thru the proxy {}'.format(bcolors.BOLD, bcolors.ENDC))
+    logging.debug('{} value of proxy information {}{}'.format(bcolors.BOLD, myproxy, bcolors.ENDC))
+    return {proxy_info['scheme']: myproxy}
+    
+
 def check_rhui_repo_file(path):
     """ 
     Handling the consistency of the Red Hat repositories
@@ -280,11 +355,6 @@ def connect_to_microsoft_repo(reposconfig):
     warnings = 0
 
     try:
-        import requests
-    except ImportError:
-        logging.critical("{}'requests' python module not found but it is required for this test script, review your python instalation{}".format(bcolors.FAIL, bcolors.ENDC))
-        exit(1) 
-    try:
         import socket
     except ImportError:
         logging.critical("{}'socket' python module not found but it is required for this test script, review your python instalation{}".format(bcolors.FAIL, bcolors.ENDC))
@@ -301,12 +371,12 @@ def connect_to_microsoft_repo(reposconfig):
        except NoOptionError:
            logging.critical('{}Critical component of the Microsoft Azure RHUI repo not found, consider resinstalling the RHUI Repo{}'.format(bcolors.FAIL, bcolors.ENDC))
            exit(1)
-      
+
        successes = 0
        for url in baseurl_info:
 
            try:
-               url_host = url.split('/')[2]
+               url_host = get_host(url)
                rhui_ip_address = socket.gethostbyname(url_host)
     
                if rhui_ip_address  in rhui4:
@@ -332,22 +402,8 @@ def connect_to_microsoft_repo(reposconfig):
                 logging.warning(e)
                 continue
 
-           url = url+'/repodata/repomd.xml'
-           logging.debug('{}This is one of links supporting the RHUI infrastructure {}{}'.format(bcolors.BOLD, url, bcolors.ENDC))
-
-
-           headers = {'content-type': 'application/json'}
-           try:
-               r = requests.get(url, proxies = system_proxy,  headers=headers, timeout=5)
-           except requests.exceptions.Timeout:
-               logging.warning('{}PROBLEM: Unable to reach RHUI server, https port is blocked for {}{}'.format(bcolors.WARNING, url, bcolors.ENDC))
-           except requests.exceptions.SSLError:
-               logging.warning('{}PROBLEM: MITM proxy misconfiguration. Proxy cannot intercept certs for {}{}'.format(bcolors.WARNING, url, bcolors.ENDC))
-           except Exception as e:
-               logging.warning('{}PROBLEM: Unable to reach RHUI server, https port is blocked for {}{}'.format(bcolors.WARNING, url, bcolors.ENDC))
-           else:
-                successes += 1
-                logging.debug('{}The RC for this {} link is {}{}'.format(bcolors.OKGREEN, url, r.status_code, bcolors.ENDC))
+           if connect_to_host(url, reposconfig, myreponame, 0):
+               successes += 1
 
        if successes == 0:
            error_link = 'https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel9#the-ips-for-the-rhui-content-delivery-servers'
@@ -383,24 +439,6 @@ def connect_to_rhui_repos(reposconfig):
         logging.critical('{}Did not find any enabled repositories in this repo config{}'.format(bcolors.FAIL, bcolors.ENDC))
         exit(1)
 
-    releasever=""
-
-    try:
-        uname = os.uname()
-    except:
-        logging.critical('{} Unable to identify OS version{}'.format(bcolors.FAIL, bcolors.ENDC))
-        exit(1)    
-
-    try:
-        basearch = uname.machine
-    except AttributeError:
-        basearch = uname[-1]
-
-    try:
-        baserelease = uname.release
-    except AttributeError:
-        baserelease = uname[2]
-
     if EUS:
         if os.path.exists('/etc/yum/vars/releasever'):
            fd = open('/etc/yum/vars/releasever')
@@ -417,9 +455,6 @@ def connect_to_rhui_repos(reposconfig):
 
             exit(1)
 
-        releasever  = re.sub(r'^.*el([0-9][0-9]*).*',r'\1',baserelease)
-        if releasever == '7':
-            releasever = '7Server'
             
 
     for myreponame in enabled_repos:
@@ -429,42 +464,18 @@ def connect_to_rhui_repos(reposconfig):
             logging.critical('{} baseurl of {} not found, consider reinstalling the corresponding RHUI repo{}'.format(bcolors.FAIL, myreponame, bcolors.ENDC))
             exit(1)
 
-        urlregex = '[^:]*://([^/]*)/.*'
 
         successes = 0
         for url in baseurl_info:
-           host_match = re.match(urlregex, url)
+           remote_host = get_host(url)
            # skips host if it was already deem unreachable
-           if host_match.group(1) in bad_hosts:
-               logging.debug('{}skipping host: {}, as connectivity to it already failed{}'.format(bcolors.FAIL, host_match.group(1), bcolors.ENDC))
+           if remote_host in bad_hosts:
+               logging.debug('{}skipping host: {}, as connectivity to it already failed{}'.format(bcolors.FAIL, remote_host, bcolors.ENDC))
                continue
 
-           url = url+"/repodata/repomd.xml"
-           url = url.replace('$releasever',releasever)
-           url = url.replace('$basearch',basearch)
-           logging.debug('{}baseurl for repo {} is {}{}'.format(bcolors.BOLD, myreponame, url, bcolors.ENDC))
 
-           headers = {'content-type': 'application/json'}
-           try:
-               cert=( reposconfig.get(myreponame, 'sslclientcert'), reposconfig.get(myreponame, 'sslclientkey') )
-           except:
-               logging.critical('{} Client certificate and/or client key attribute not found for {}, testing connectivity w/o certificates{}'.format(bcolors.FAIL, myreponame, bcolors.ENDC))
-               cert=()
-
-           try:
-               r = requests.get(url, proxies=system_proxy, headers=headers, cert=cert, timeout=5)
-               if r.status_code == 200:
-                   logging.debug('{}the RC for this {} link is {}{}'.format(bcolors.OKGREEN, url,r.status_code, bcolors.ENDC))
-                   successes += 1
-               else:
-                   logging.critical('{}the RC for this {} link is {}{}'.format(bcolors.FAIL, url,r.status_code, bcolors.ENDC))
-
-           except requests.exceptions.Timeout:
-               logging.warning('{} PROBLEM: Unable to reach RHUI server, https port is blocked for {}{}'.format(bcolors.WARNING, url, bcolors.ENDC))
-           except requests.exceptions.SSLError:
-               logging.warning('{} PROBLEM: MITM proxy misconfiguration. Proxy cannot intercept certs for {}{}'.format(bcolors.WARNING, url, bcolors.ENDC))
-           except requests.exceptions.RequestException:
-                logging.warning('{} PROBLEM: Unable to establish communication to {}, please allow SSL traffic to it{}'.format(bcolors.WARNING, url, bcolors.ENDC))
+           if connect_to_host(url, reposconfig, myreponame, 1):
+               successes += 1
 
         if successes == 0:
             logging.critical('{} PROBLEM: Cannot communicate with any RHUI server, you must allow at least one{}'.format(bcolors.FAIL, bcolors.ENDC))
@@ -504,8 +515,7 @@ logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 yum_dnf_conf = read_yum_dnf_conf()
-system_proxy = get_proxies(yum_dnf_conf)
-# system_proxy = {}
+system_proxy = get_proxies(yum_dnf_conf,'main')
 
 for package_name in rpm_names():
     data                                     = get_pkg_info(package_name)
