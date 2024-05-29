@@ -112,7 +112,7 @@ def rpm_names():
     Identifies the RHUI repositories installed in the server and returns a list of RHUI rpms installed in the server.
     """
     logging.debug('{} Entering repo_name() {}'.format(bcolors.BOLD, bcolors.ENDC))
-    result = subprocess.Popen('rpm -qa | grep rhui', shell=True, stdout=subprocess.PIPE)
+    result = subprocess.Popen('rpm -qa | egrep -v leapp | egrep rhui', shell=True, stdout=subprocess.PIPE)
     rpm_names = result.stdout.readlines()
     rpm_names = [ rpm.decode('utf-8').strip() for rpm in rpm_names ]
     if rpm_names:
