@@ -57,7 +57,7 @@ def get_host(url):
     host_match = re.match(urlregex, url)
     return host_match.group(1)
 
-def connect_to_host(url, selection, mysection, releasever):
+def connect_to_host(url, selection, mysection):
 
     try:
         uname = os.uname()
@@ -74,6 +74,14 @@ def connect_to_host(url, selection, mysection, releasever):
         baserelease = uname.release
     except AttributeError:
         baserelease = uname[2]
+
+    if eus:
+        fd = open('/etc/yum/vars/releasever')
+        releasever = fd.readline().strip()
+    else:
+        releasever  = re.sub(r'^.*el([0-9][0-9]*).*',r'\1',baserelease)
+        if releasever == '7':
+            releasever = '7Server'
 
     url = url+"/repodata/repomd.xml"
     url = url.replace('$releasever',releasever)
@@ -331,11 +339,10 @@ def check_repos(reposconfig):
     logging.debug('{}Entering microsoft_repo(){}'.format(bcolors.BOLD, bcolors.ENDC))
     rhuirepo = '^(rhui-)?microsoft.*'
     eusrepo  = '.*-(eus|e4s)-.*'
-    releasever = ''
     microsoft_reponame = ''
 
     for repo_name in reposconfig.sections():
-        if re.match('default', repo_name):
+        if re.match('\[*default\]*', repo_name):
             continue
 
         if re.match(rhuirepo, repo_name):
@@ -358,10 +365,7 @@ def check_repos(reposconfig):
         logging.debug('{}Server is using {} repository and it is enabled{}'.format(bcolors.BOLD, repo_name, bcolors.ENDC))
 
     if eus:
-        if os.path.exists('/etc/yum/vars/releasever'):
-           fd = open('/etc/yum/vars/releasever')
-           releasever = fd.readline().strip()
-        else:
+        if not os.path.exists('/etc/yum/vars/releasever'):
            logging.critical('{} Server is using EUS repostories but /etc/yum/vars/releasever file not found, please correct and test again{}'.format(bcolors.FAIL, bcolors.ENDC))
            logging.critical('{} Refer to: https://learn.microsoft.com/en-us/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo{}'.format(bcolors.FAIL, bcolors.ENDC))
            exit(1)
@@ -372,9 +376,8 @@ def check_repos(reposconfig):
             logging.critical('{} Refer to: https://learn.microsoft.com/en-us/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo{}'.format(bcolors.FAIL, bcolors.ENDC))
             exit(1)
 
-    return releasever
 
-def connect_to_repos(reposconfig, releasever):
+def connect_to_repos(reposconfig):
     """downloads repomd.xml from each enabled repository """
     logging.debug('{}Entering connect_to_repos(){}'.format(bcolors.BOLD, bcolors.ENDC))
     rhuirepo = '^rhui-microsoft.*'
@@ -388,7 +391,7 @@ def connect_to_repos(reposconfig, releasever):
 
     for repo_name in reposconfig.sections():
 
-        if re.match('default', repo_name):
+        if re.match('\[*default\]*', repo_name):
             continue
 
         try:
@@ -436,8 +439,7 @@ def connect_to_repos(reposconfig, releasever):
                  bad_hosts.append(url_host)
                  continue
             
-            logging.debug("we made it so far {} {}".format(repo_name, releasever))
-            if connect_to_host(url, reposconfig, repo_name, releasever):
+            if connect_to_host(url, reposconfig, repo_name):
                 successes += 1
 
         if successes == 0:
@@ -489,8 +491,8 @@ for package_name in rpm_names():
         expiration_time(data['clientcert'])
 
         reposconfig = check_rhui_repo_file(data['repofile'])
-        releasever = check_repos(reposconfig)
-        connect_to_repos(reposconfig, releasever)
+        check_repos(reposconfig)
+        connect_to_repos(reposconfig)
 
 
 logging.critical('{}All communication tests to the RHUI infrastructure have passed, if problems persisit, remove third party repositories and test again{}'.format(bcolors.OKGREEN, bcolors.ENDC))
