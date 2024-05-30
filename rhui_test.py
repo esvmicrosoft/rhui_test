@@ -8,6 +8,8 @@ import subprocess
 import time
 import sys
 #import urllib.request
+
+eus = 0
 try:
     import requests
 except ImportError:
@@ -19,6 +21,12 @@ rhui4 = ['52.136.197.163', '20.225.226.182', '52.142.4.99', '20.248.180.252', '2
 rhuius = ['13.72.186.193', '13.72.14.155', '52.224.249.194']
 system_proxy = dict()
 bad_hosts = list()
+
+pattern = dict()
+pattern['clientcert'] = r'^/[/a-zA-Z0-9_\-]+\.(crt)$'
+pattern['clientkey']  = r'^/[/a-zA-Z0-9_\-]+\.(pem)$'
+pattern['repofile']    = r'^/[/a-zA-Z0-9_\-\.]+\.(repo)$'
+
 
 try:
     import configparser
@@ -49,9 +57,8 @@ def get_host(url):
     host_match = re.match(urlregex, url)
     return host_match.group(1)
 
-def connect_to_host(url, selection, mysection, verify):
+def connect_to_host(url, selection, mysection, releasever):
 
-    releasever=""
     try:
         uname = os.uname()
     except:
@@ -68,9 +75,6 @@ def connect_to_host(url, selection, mysection, verify):
     except AttributeError:
         baserelease = uname[2]
 
-    releasever  = re.sub(r'^.*el([0-9][0-9]*).*',r'\1',baserelease)
-    if releasever == '7':
-        releasever = '7Server'
     url = url+"/repodata/repomd.xml"
     url = url.replace('$releasever',releasever)
     url = url.replace('$basearch',basearch)
@@ -81,12 +85,11 @@ def connect_to_host(url, selection, mysection, verify):
     local_proxy = get_proxies(selection, mysection)
 
     cert = ()
-    if verify:
-        try:
-            cert=( selection.get(mysection, 'sslclientcert'), selection.get(mysection, 'sslclientkey') )
-        except:
-            logging.warning('{} Client certificate and/or client key attribute not found for {}, testing connectivity w/o certificates{}'.format(bcolors.WARNING, mysection, bcolors.ENDC))
-            cert=()
+    try:
+        cert=( selection.get(mysection, 'sslclientcert'), selection.get(mysection, 'sslclientkey') )
+    except:
+        logging.warning('{} Client certificate and/or client key attribute not found for {}, testing connectivity w/o certificates{}'.format(bcolors.WARNING, mysection, bcolors.ENDC))
+        cert=()
 
     try:
         r = s.get(url, cert=cert, headers=headers, timeout=5, proxies=local_proxy)
@@ -112,7 +115,7 @@ def rpm_names():
     Identifies the RHUI repositories installed in the server and returns a list of RHUI rpms installed in the server.
     """
     logging.debug('{} Entering repo_name() {}'.format(bcolors.BOLD, bcolors.ENDC))
-    result = subprocess.Popen('rpm -qa | egrep -v leapp | egrep rhui', shell=True, stdout=subprocess.PIPE)
+    result = subprocess.Popen("rpm -qa 'rhui-*'", shell=True, stdout=subprocess.PIPE)
     rpm_names = result.stdout.readlines()
     rpm_names = [ rpm.decode('utf-8').strip() for rpm in rpm_names ]
     if rpm_names:
@@ -125,11 +128,8 @@ def rpm_names():
         exit(1) 
 
 def get_pkg_info(package_name):
+    ''' Identifies rhui package name(s)'''
     logging.debug('{} Entering get_pkg_info() {}'.format(bcolors.BOLD, bcolors.ENDC))
-    pattern = {}
-    pattern['clientcert'] = r'^/[/a-zA-Z0-9_\-]+\.(crt)$'
-    pattern['clientkey']  = r'^/[/a-zA-Z0-9_\-]+\.(pem)$'
-    pattern['repofile']    = r'^/[/a-zA-Z0-9_\-\.]+\.(repo)$'
 
     logging.debug('{} Entering pkg_info function {}'.format(bcolors.BOLD, bcolors.ENDC))
     try:
@@ -147,14 +147,20 @@ def get_pkg_info(package_name):
     except:
         logging.critical('{}Failed to grab RHUI RPM details, rebuild RPM database{}'.format(bcolors.FAIL, bcolors.ENDC))
         exit(1)
+    else:
+        return hash_info
+
+
+def verify_pkg_info(package_name, rpm_info):
+    ''' verifies basic elements of the RHUI package are present on the server '''
 
     errors = 0
     for keyname in pattern.keys():
-        if keyname not in hash_info.keys():
+        if keyname not in rpm_info.keys():
             logging.critical('{}{} file definition not found in RPM metadata, {} rpm needs to be reinstalled{}'.format(bcolors.FAIL, keyname, package_name, bcolors.ENDC))
             errors += 1
         else: 
-            if not os.path.exists(hash_info[keyname]):
+            if not os.path.exists(rpm_info[keyname]):
                 logging.critical('{}{} file not found in server, {} rpm needs to be reinstalled{}'.format(bcolors.FAIL, keyname, package_name, bcolors.ENDC))
                 errors += 1
 
@@ -162,8 +168,8 @@ def get_pkg_info(package_name):
         data_link = "https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/troubleshoot-linux-rhui-certificate-issues#cause-2-rhui-certificate-is-missing"
         logging.critical('{}follow {} for information to install the RHUI package{}'.format(bcolors.FAIL,data_link, bcolors.ENDC))
         exit(1)
-    else:
-        return(hash_info)
+
+    return True
 
 def default_policy():
     """"Returns a boolean whether the default encryption policies are set to default via the /etc/crypto-policies/config file, if it can't test it, the result will be set to true."""
@@ -178,10 +184,10 @@ def default_policy():
     except AttributeError:
         baserelease = uname[2]
 
-    releasever  = re.sub(r'^.*el([0-9][0-9]*).*',r'\1',baserelease)
+    policy_releasever  = re.sub(r'^.*el([0-9][0-9]*).*',r'\1',baserelease)
 
     # return true for EL7
-    if releasever == '7':
+    if policy_releasever == '7':
         return True
 
     try:
@@ -194,14 +200,14 @@ def default_policy():
 
     return True
 
-def expiration_time(path):
+def expiration_time(cert_path):
     """ 
-    Checks whether client certificate has expired yet or not.
+    Checks whether client certificate stored at cert_path has expired or not.
     """
     logging.debug('{} Entering expiration_time(){}'.format(bcolors.BOLD, bcolors.ENDC))
     logging.debug('{}Checking certificate expiration time{}'.format(bcolors.BOLD, bcolors.ENDC))
     try:
-        result = subprocess.check_call('openssl x509 -in {} -checkend 0 > /dev/null 2>&1 '.format(path),shell=True)
+        result = subprocess.check_call('openssl x509 -in {} -checkend 0 > /dev/null 2>&1 '.format(cert_path),shell=True)
 
     except subprocess.CalledProcessError:
         logging.critical('{}Client RHUI Certificate has expired, please update the rhui RPM{}'.format(bcolors.FAIL, bcolors.ENDC))
@@ -295,7 +301,8 @@ def get_proxies(parser_object, mysection):
 def check_rhui_repo_file(path):
     """ 
     Handling the consistency of the Red Hat repositories
-    path: Indicates where the rhui repo is stored.
+    path:    Indicates where the rhui repo is stored.
+    returns: A RHUI repository configuration stored in a configparser structure, each repository is a section.
     """   
     logging.debug('{}Entering check_rhui_repo_file(){}'.format(bcolors.BOLD, bcolors.ENDC))
 
@@ -317,41 +324,60 @@ def check_rhui_repo_file(path):
         exit(1)
 
 
-def check_microsoft_repo(reposconfig):
+def check_repos(reposconfig):
     """ Checks whether the rhui-microsoft-azure-* repository exists and tests connectivity to it"""
+    global eus 
+
     logging.debug('{}Entering microsoft_repo(){}'.format(bcolors.BOLD, bcolors.ENDC))
     rhuirepo = '^(rhui-)?microsoft.*'
-    myreponame = ''
+    eusrepo  = '.*-(eus|e4s)-.*'
+    releasever = ''
+    microsoft_reponame = ''
 
     for repo_name in reposconfig.sections():
+        if re.match('default', repo_name):
+            continue
+
         if re.match(rhuirepo, repo_name):
            logging.info('{}Using Microsoft RHUI repository {}{}'.format(bcolors.OKGREEN, repo_name, bcolors.ENDC))
-           myreponame = repo_name
+           microsoft_reponame = repo_name
+        if re.match(eusrepo, repo_name):
+           eus = 1
 
-    if myreponame:
-       try:
-           enabled =  int(reposconfig.get(myreponame, 'enabled').strip())
-           
-       except configparser.NoOptionError:
-           enabled = 1
-       
-       if enabled != 1:
-           logging.critical('{}Microsoft RHUI repository not enbaled, please enable it with the following command{}'.format(bcolors.FAIL, bcolors.ENDC))
-           logging.critical('{}yum-config-manager --enable {}{}'.format(bcolors.FAIL, repo_name, bcolors.ENDC))
-           exit(1)
-       else:
-            logging.debug('{}Server is using {} repository and it is enabled{}'.format(bcolors.BOLD, repo_name, bcolors.ENDC))
-
-    else:
-        logging.critical('{}The Microsoft RHUI repo not found, this will lead to problems{}'.format(bcolors.FAIL, bcolors.ENDC))
-        logging.critical('{}Follow this document to reinstall the RHUI Repository RPM: {}{}'.format(bcolors.FAIL, 'https://learn.microsoft.com/en-us/azure/virtual-machines/workloads/redhat/redhat-rhui#image-update-behavior', bcolors.ENDC))
+    try:
+        enabled =  int(reposconfig.get(microsoft_reponame, 'enabled').strip())
+ 
+    except configparser.NoOptionError:
+        enabled = 1
+    
+    if not enabled:
+        logging.critical('{}Microsoft RHUI repository not enabled, please enable it with the following command{}'.format(bcolors.FAIL, bcolors.ENDC))
+        logging.critical('{}yum-config-manager --enable {}{}'.format(bcolors.FAIL, repo_name, bcolors.ENDC))
         exit(1)
+    else:
+        logging.debug('{}Server is using {} repository and it is enabled{}'.format(bcolors.BOLD, repo_name, bcolors.ENDC))
 
-def connect_to_microsoft_repo(reposconfig):
-    """downloads repomd.xml from Microsoft RHUI Repo"""
-    logging.debug('{}Entering connect_to_microsoft_repo(){}'.format(bcolors.BOLD, bcolors.ENDC))
+    if eus:
+        if os.path.exists('/etc/yum/vars/releasever'):
+           fd = open('/etc/yum/vars/releasever')
+           releasever = fd.readline().strip()
+        else:
+           logging.critical('{} Server is using EUS repostories but /etc/yum/vars/releasever file not found, please correct and test again{}'.format(bcolors.FAIL, bcolors.ENDC))
+           logging.critical('{} Refer to: https://learn.microsoft.com/en-us/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo{}'.format(bcolors.FAIL, bcolors.ENDC))
+           exit(1)
+
+    if not eus:
+        if os.path.exists('/etc/yum/vars/releasever'):
+            logging.critical('{} Server is using non-EUS repos and /etc/yum/vars/releasever file found, correct and try again'.format(bcolors.FAIL, bcolors.ENDC))
+            logging.critical('{} Refer to: https://learn.microsoft.com/en-us/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo{}'.format(bcolors.FAIL, bcolors.ENDC))
+            exit(1)
+
+    return releasever
+
+def connect_to_repos(reposconfig, releasever):
+    """downloads repomd.xml from each enabled repository """
+    logging.debug('{}Entering connect_to_repos(){}'.format(bcolors.BOLD, bcolors.ENDC))
     rhuirepo = '^rhui-microsoft.*'
-    myreponame = ""
     warnings = 0
 
     try:
@@ -361,125 +387,64 @@ def connect_to_microsoft_repo(reposconfig):
         exit(1) 
 
     for repo_name in reposconfig.sections():
-        if re.match(rhuirepo, repo_name):
-           logging.debug('{}Microsoft repository name is: {}{}'.format(bcolors.BOLD, repo_name, bcolors.ENDC))
-           myreponame = repo_name
 
-    if myreponame:
-       try:
-           baseurl_info = reposconfig.get(myreponame, 'baseurl').strip().split('\n')
-       except NoOptionError:
-           logging.critical('{}Critical component of the Microsoft Azure RHUI repo not found, consider resinstalling the RHUI Repo{}'.format(bcolors.FAIL, bcolors.ENDC))
-           exit(1)
+        if re.match('default', repo_name):
+            continue
 
-       successes = 0
-       for url in baseurl_info:
-
-           try:
-               url_host = get_host(url)
-               rhui_ip_address = socket.gethostbyname(url_host)
-    
-               if rhui_ip_address  in rhui4:
-                   logging.debug('{}RHUI host {} points to RHUI4 infrastructure{}'.format(bcolors.OKGREEN, url_host, bcolors.ENDC))
-
-               elif rhui_ip_address in rhui3 + rhuius:
-                   reinstall_link = 'https://learn.microsoft.com/troubleshoot/azure/virtual-machines/linux/troubleshoot-linux-rhui-certificate-issues?tabs=rhel7-eus%2Crhel7-noneus%2Crhel7-rhel-sap-apps%2Crhel8-rhel-sap-apps%2Crhel9-rhel-sap-apps#solution-2-reinstall-the-eus-non-eus-or-sap-rhui-package'
-                   logging.error('{}RHUI server {} points to decommissioned infrastructure, reinstall the RHUI package{}'.format(bcolors.FAIL, url_host, bcolors.ENDC))
-                   logging.error('{}for more detailed information, use: {}{}'.format(bcolors.FAIL, reinstall_link, bcolors.ENDC))
-
-                   bad_hosts.append(url_host)
-
-                   warnings = warnings + 1
-                   continue
-               else:
-                   logging.critical('{}RHUI server {} points to an invalid destination, validate /etc/hosts file for any static RHUI IPs, reinstall the RHUI package{}'.format(bcolors.FAIL, url_host, bcolors.ENDC))
-                   continue
-           except Exception as e:
-                logging.warning('{}Unable to resolve IP address for host {}{}'.format(bcolors.WARNING, url_host, bcolors.ENDC))
-                logging.warning('{}Please make sure your server is able to resolve {} to one of the ip addresses{}'.format(bcolors.WARNING, url_host, bcolors.ENDC))
-                rhui_link = 'https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#the-ips-for-the-rhui-content-delivery-servers'
-                logging.warning('{}listed in this document {}{}'.format(bcolors.WARNING, rhui_link, bcolors.ENDC))
-                logging.warning(e)
-                continue
-
-           if connect_to_host(url, reposconfig, myreponame, 0):
-               successes += 1
-
-       if successes == 0:
-           error_link = 'https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel9#the-ips-for-the-rhui-content-delivery-servers'
-           logging.critical('{}PROBLEM: Cannot communicate with any RHUI server, you must allow at least one of the IP addresses listed here {}{}'.format(bcolors.FAIL, error_link, bcolors.ENDC))
-           sys.exit(1)
-
-def connect_to_rhui_repos(reposconfig):
-    """ check if EUS or NON-EUS repos are being used correctly."""
-    logging.debug('{}Entering connect_to_rhui_repos(){}'.format(bcolors.BOLD, bcolors.ENDC))
-    import requests
-
-    EUS = 0
-    rhuirepo = '^(rhui-)?microsoft.*'
-    eusrepo  = '.*-(eus|e4s)-.*'
-    default= '.*default.*'
-
-    enabled_repos = []
-    for repo_name in reposconfig.sections():
-       if not (re.match(rhuirepo, repo_name) or re.match(default, repo_name)):
-           try:
-               if reposconfig.get(repo_name, 'enabled').strip() == '1': 
-                   logging.info('{} Repo {} enabled{}'.format(bcolors.OKGREEN, repo_name, bcolors.ENDC))
-                   if re.match(eusrepo, repo_name):
-                       EUS = 1
-                   enabled_repos.append(repo_name) 
-               else:
-                   logging.debug('{}{} repo not enabled{}'.format(bcolors.BOLD, repo_name, bcolors.ENDC))
-
-           except configparser.NoOptionError:
-               logging.error('{}Repo {} does not have an enabled attribute skipping{}'.format(bcolors.FAIL, repo_name, bcolors.ENDC))
-
-    if len(enabled_repos) == 0:
-        logging.critical('{}Did not find any enabled repositories in this repo config{}'.format(bcolors.FAIL, bcolors.ENDC))
-        exit(1)
-
-    if EUS:
-        if os.path.exists('/etc/yum/vars/releasever'):
-           fd = open('/etc/yum/vars/releasever')
-           releasever = fd.readline().strip()
-        else:
-           logging.critical('{} Server is using EUS repostories but /etc/yum/vars/releasever file not found, please correct and test again{}'.format(bcolors.FAIL, bcolors.ENDC))
-           logging.critical('{} Refer to: https://learn.microsoft.com/en-us/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo{}'.format(bcolors.FAIL, bcolors.ENDC))
-           exit(1)
-
-    if not EUS:
-        if os.path.exists('/etc/yum/vars/releasever'):
-            logging.critical('{} Server is using non-EUS repos and /etc/yum/vars/releasever file found, correct and try again'.format(bcolors.FAIL, bcolors.ENDC))
-            logging.critical('{} Refer to: https://learn.microsoft.com/en-us/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo{}'.format(bcolors.FAIL, bcolors.ENDC))
-
-            exit(1)
-
-            
-
-    for myreponame in enabled_repos:
         try:
-           baseurl_info = reposconfig.get(myreponame, 'baseurl').strip().split('\n')
-        except configparser.NoOptionError:
-            logging.critical('{} baseurl of {} not found, consider reinstalling the corresponding RHUI repo{}'.format(bcolors.FAIL, myreponame, bcolors.ENDC))
-            exit(1)
+            enabled = reposconfig.get(repo_name, 'enabled').strip() 
+        except:
+            enabled = 1
 
+        if not enabled:
+            continue
+
+        try:
+            baseurl_info = reposconfig.get(repo_name, 'baseurl').strip().split('\n')
+        except configparser.NoOptionError:
+            reinstall_link = 'https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/linux/troubleshoot-linux-rhui-certificate-issues?source=recommendations&tabs=rhel7-eus%2Crhel7-noneus%2Crhel7-rhel-sap-apps%2Crhel8-rhel-sap-apps%2Crhel9-rhel-sap-apps#solution-2-reinstall-the-eus-non-eus-or-sap-rhui-package'
+            logging.critical('{}The baseurl is a critical component of the repository stanza and it is not found for repo {}{}'.format(bcolors.FAIL, repo_name, bcolors.ENDC))
+            logging.critical('{}Follow this link to reinstall the Microsoft RHUI repo {}{}'.format(bcolors.FAIL, reinstall_link, bcolors.ENDC))
+            exit(1)
 
         successes = 0
         for url in baseurl_info:
-           remote_host = get_host(url)
-           # skips host if it was already deem unreachable
-           if remote_host in bad_hosts:
-               logging.debug('{}skipping host: {}, as connectivity to it already failed{}'.format(bcolors.FAIL, remote_host, bcolors.ENDC))
-               continue
+            try:
+                url_host = get_host(url)
+                rhui_ip_address = socket.gethostbyname(url_host)
+    
+                if rhui_ip_address  in rhui4:
+                    logging.debug('{}RHUI host {} points to RHUI4 infrastructure{}'.format(bcolors.OKGREEN, url_host, bcolors.ENDC))
 
-
-           if connect_to_host(url, reposconfig, myreponame, 1):
-               successes += 1
+                elif rhui_ip_address in rhui3 + rhuius:
+                    reinstall_link = 'https://learn.microsoft.com/troubleshoot/azure/virtual-machines/linux/troubleshoot-linux-rhui-certificate-issues?tabs=rhel7-eus%2Crhel7-noneus%2Crhel7-rhel-sap-apps%2Crhel8-rhel-sap-apps%2Crhel9-rhel-sap-apps#solution-2-reinstall-the-eus-non-eus-or-sap-rhui-package'
+                    logging.error('{}RHUI server {} points to decommissioned infrastructure, reinstall the RHUI package{}'.format(bcolors.FAIL, url_host, bcolors.ENDC))
+                    logging.error('{}for more detailed information, use: {}{}'.format(bcolors.FAIL, reinstall_link, bcolors.ENDC))
+                    bad_hosts.append(url_host)
+                    warnings = warnings + 1
+                    continue
+                else:
+                    logging.critical('{}RHUI server {} points to an invalid destination, validate /etc/hosts file for any static RHUI IPs, reinstall the RHUI package{}'.format(bcolors.FAIL, url_host, bcolors.ENDC))
+                    bad_hosts.append(url_host)
+                    continue
+            except Exception as e:
+                 logging.warning('{}Unable to resolve IP address for host {}{}'.format(bcolors.WARNING, url_host, bcolors.ENDC))
+                 logging.warning('{}Please make sure your server is able to resolve {} to one of the ip addresses{}'.format(bcolors.WARNING, url_host, bcolors.ENDC))
+                 rhui_link = 'https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#the-ips-for-the-rhui-content-delivery-servers'
+                 logging.warning('{}listed in this document {}{}'.format(bcolors.WARNING, rhui_link, bcolors.ENDC))
+                 logging.warning(e)
+                 bad_hosts.append(url_host)
+                 continue
+            
+            logging.debug("we made it so far {} {}".format(repo_name, releasever))
+            if connect_to_host(url, reposconfig, repo_name, releasever):
+                successes += 1
 
         if successes == 0:
-            logging.critical('{} PROBLEM: Cannot communicate with any RHUI server, you must allow at least one{}'.format(bcolors.FAIL, bcolors.ENDC))
+            error_link = 'https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel9#the-ips-for-the-rhui-content-delivery-servers'
+            logging.critical('{}PROBLEM: Cannot communicate with any RHUI server, you must allow at least one of the IP addresses listed here {}{}'.format(bcolors.FAIL, error_link, bcolors.ENDC))
             sys.exit(1)
+
 
 ######################################################
 # Logging the output of the script into /var/log/rhuicheck.log file
@@ -505,6 +470,7 @@ parser.add_argument(  '--debug','-d',
                       help='Use DEBUG level')
 args = parser.parse_args()
 
+
 if args.debug:
     logging.basicConfig(level=logging.DEBUG)
 else:
@@ -518,12 +484,14 @@ yum_dnf_conf = read_yum_dnf_conf()
 system_proxy = get_proxies(yum_dnf_conf,'main')
 
 for package_name in rpm_names():
-    data                                     = get_pkg_info(package_name)
-    expiration_time(data['clientcert'])
-    reposconfig                              = check_rhui_repo_file(data['repofile'])
-    check_microsoft_repo(reposconfig)
-    connect_to_microsoft_repo(reposconfig)
-    connect_to_rhui_repos(reposconfig)
+    data = get_pkg_info(package_name)
+    if verify_pkg_info(package_name, data):
+        expiration_time(data['clientcert'])
+
+        reposconfig = check_rhui_repo_file(data['repofile'])
+        releasever = check_repos(reposconfig)
+        connect_to_repos(reposconfig, releasever)
+
 
 logging.critical('{}All communication tests to the RHUI infrastructure have passed, if problems persisit, remove third party repositories and test again{}'.format(bcolors.OKGREEN, bcolors.ENDC))
 logging.critical('{}The RHUI repository configuration file is {}, move any other configuration file to a temporary location and test again{}'.format(bcolors.OKGREEN, data['repofile'], bcolors.ENDC))
