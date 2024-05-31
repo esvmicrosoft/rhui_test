@@ -57,6 +57,24 @@ def get_host(url):
     host_match = re.match(urlregex, url)
     return host_match.group(1)
 
+def validate_ca_certificates():
+    """
+    Used to verify whether the default certificate database has been modified or not
+    """
+    logging.debug('{} Entering validate_ca-certificates() {}'.format(bcolors.BOLD, bcolors.ENDC))
+    try:
+        result = subprocess.call("/usr/bin/rpm -V ca-certificates")
+    except:
+        logging.error('{}Unable to check server side certificates installed on the server{}'.format(bcolors.FAIL, bcolors.ENDC))
+        logging.error('{}make sure the ca-certificates package is properly installed{}'.format(bcolors.FAIL, bcolors.ENDC))
+        exit(1)
+   
+    if result:
+        reinstall_ca_bundle_link = 'https://learn.microsoft.com/troubleshoot/azure/virtual-machines/linux/troubleshoot-linux-rhui-certificate-issues?tabs=rhel7-eus%2Crhel7-noneus%2Crhel7-rhel-sap-apps%2Crhel8-rhel-sap-apps%2Crhel9-rhel-sap-apps#solution-4-update-or-reinstall-the-ca-certificates-package'
+        logging.error('{}The ca-certificate package is invalid, you can reinstall follow {} to reinstall it manually{}'.format(bcolors.FAIL, reinstall_ca_bundle_link,  bcolors.ENDC))
+    else:
+        return True
+
 def connect_to_host(url, selection, mysection):
 
     try:
@@ -105,10 +123,15 @@ def connect_to_host(url, selection, mysection):
         logging.warning('{}PROBLEM: Unable to reach RHUI server, https port is blocked for {}{}'.format(bcolors.WARNING, url, bcolors.ENDC))
         return False
     except requests.exceptions.SSLError:
+        validate_ca_certificates()
         logging.warning('{}PROBLEM: MITM proxy misconfiguration. Proxy cannot intercept certs for {}{}'.format(bcolors.WARNING, url, bcolors.ENDC))
         return 1
+    except OSError:
+        validate_ca_certificates()
+        raise()
     except Exception as e:
-        logging.warning('{}PROBLEM: Unable to reach RHUI server, https port is blocked for {}{}'.format(bcolors.WARNING, url, bcolors.ENDC))
+        logging.warning('{}PROBLEM: Unknown error, unable to connect to the RHUI server {}, {}'.format(bcolors.WARNING, url, bcolors.ENDC))
+        raise(e)
         return False
     else:
         if r.status_code == 200:
@@ -132,7 +155,7 @@ def rpm_names():
         return(rpm_names)
     else:
         logging.critical('{} could not find a specific RHUI package installed, please eefer to the documentation and install the apropriate one {}'.format(bcolors.FAIL, bcolors.ENDC))
-        logging.critical('{} Consider using the following document to install RHUI support https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/troubleshoot-linux-rhui-certificate-issues#cause-3-rhui-package-is-missing {}'.format(bcolors.FAIL, bcolors.ENDC))
+        logging.critical('{} Consider using the following document to install RHUI support https://learn.microsoft.com/troubleshoot/azure/virtual-machines/troubleshoot-linux-rhui-certificate-issues#cause-3-rhui-package-is-missing {}'.format(bcolors.FAIL, bcolors.ENDC))
         exit(1) 
 
 def get_pkg_info(package_name):
@@ -173,7 +196,7 @@ def verify_pkg_info(package_name, rpm_info):
                 errors += 1
 
     if errors:
-        data_link = "https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/troubleshoot-linux-rhui-certificate-issues#cause-2-rhui-certificate-is-missing"
+        data_link = "https://learn.microsoft.com/troubleshoot/azure/virtual-machines/troubleshoot-linux-rhui-certificate-issues#cause-2-rhui-certificate-is-missing"
         logging.critical('{}follow {} for information to install the RHUI package{}'.format(bcolors.FAIL,data_link, bcolors.ENDC))
         exit(1)
 
@@ -219,7 +242,7 @@ def expiration_time(cert_path):
 
     except subprocess.CalledProcessError:
         logging.critical('{}Client RHUI Certificate has expired, please update the rhui RPM{}'.format(bcolors.FAIL, bcolors.ENDC))
-        logging.critical('{}Refer to: https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/troubleshoot-linux-rhui-certificate-issues#cause-1-rhui-client-certificate-is-expired{}'.format(bcolors.FAIL, bcolors.ENDC))
+        logging.critical('{}Refer to: https://learn.microsoft.com/troubleshoot/azure/virtual-machines/troubleshoot-linux-rhui-certificate-issues#cause-1-rhui-client-certificate-is-expired{}'.format(bcolors.FAIL, bcolors.ENDC))
         exit(1)
 
     if not default_policy():
@@ -367,13 +390,13 @@ def check_repos(reposconfig):
     if eus:
         if not os.path.exists('/etc/yum/vars/releasever'):
            logging.critical('{} Server is using EUS repostories but /etc/yum/vars/releasever file not found, please correct and test again{}'.format(bcolors.FAIL, bcolors.ENDC))
-           logging.critical('{} Refer to: https://learn.microsoft.com/en-us/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo{}'.format(bcolors.FAIL, bcolors.ENDC))
+           logging.critical('{} Refer to: https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo{}'.format(bcolors.FAIL, bcolors.ENDC))
            exit(1)
 
     if not eus:
         if os.path.exists('/etc/yum/vars/releasever'):
             logging.critical('{} Server is using non-EUS repos and /etc/yum/vars/releasever file found, correct and try again'.format(bcolors.FAIL, bcolors.ENDC))
-            logging.critical('{} Refer to: https://learn.microsoft.com/en-us/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo{}'.format(bcolors.FAIL, bcolors.ENDC))
+            logging.critical('{} Refer to: https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo{}'.format(bcolors.FAIL, bcolors.ENDC))
             exit(1)
 
 
@@ -405,7 +428,7 @@ def connect_to_repos(reposconfig):
         try:
             baseurl_info = reposconfig.get(repo_name, 'baseurl').strip().split('\n')
         except configparser.NoOptionError:
-            reinstall_link = 'https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/linux/troubleshoot-linux-rhui-certificate-issues?source=recommendations&tabs=rhel7-eus%2Crhel7-noneus%2Crhel7-rhel-sap-apps%2Crhel8-rhel-sap-apps%2Crhel9-rhel-sap-apps#solution-2-reinstall-the-eus-non-eus-or-sap-rhui-package'
+            reinstall_link = 'https://learn.microsoft.com/troubleshoot/azure/virtual-machines/linux/troubleshoot-linux-rhui-certificate-issues?source=recommendations&tabs=rhel7-eus%2Crhel7-noneus%2Crhel7-rhel-sap-apps%2Crhel8-rhel-sap-apps%2Crhel9-rhel-sap-apps#solution-2-reinstall-the-eus-non-eus-or-sap-rhui-package'
             logging.critical('{}The baseurl is a critical component of the repository stanza and it is not found for repo {}{}'.format(bcolors.FAIL, repo_name, bcolors.ENDC))
             logging.critical('{}Follow this link to reinstall the Microsoft RHUI repo {}{}'.format(bcolors.FAIL, reinstall_link, bcolors.ENDC))
             exit(1)
@@ -427,7 +450,7 @@ def connect_to_repos(reposconfig):
                     warnings = warnings + 1
                     continue
                 else:
-                    logging.critical('{}RHUI server {} points to an invalid destination, validate /etc/hosts file for any static RHUI IPs, reinstall the RHUI package{}'.format(bcolors.FAIL, url_host, bcolors.ENDC))
+                    logging.critical('{}RHUI server {} points to an invalid destination, validate /etc/hosts file for any invalid static RHUI IPs, reinstall the RHUI package{}'.format(bcolors.FAIL, url_host, bcolors.ENDC))
                     bad_hosts.append(url_host)
                     continue
             except Exception as e:
