@@ -325,7 +325,6 @@ def get_proxies(parser_object, mysection):
             myproxy = '{}{}@{}'.format(proxy_prefix, proxy_info['proxy_user'], proxy_suffix)
 
     logging.warning('{} Found proxy information in the config files, make sure connectivity works thru the proxy {}'.format(bcolors.BOLD, bcolors.ENDC))
-    logging.debug('{} value of proxy information {}{}'.format(bcolors.BOLD, myproxy, bcolors.ENDC))
     return {proxy_info['scheme']: myproxy}
     
 
