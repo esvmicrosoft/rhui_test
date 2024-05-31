@@ -450,7 +450,10 @@ def connect_to_repos(reposconfig):
                     warnings = warnings + 1
                     continue
                 else:
-                    logging.critical('{}RHUI server {} points to an invalid destination, validate /etc/hosts file for any invalid static RHUI IPs, reinstall the RHUI package{}'.format(bcolors.FAIL, url_host, bcolors.ENDC))
+                    logging.critical('{}RHUI server {} points to an invalid destination, validate /etc/hosts file for any invalid static RHUI IPs or reinstall the RHUI package{}'.format(bcolors.FAIL, url_host, bcolors.ENDC))
+                    logging.warning('{}Please make sure your server is able to resolve {} to one of the ip addresses{}'.format(bcolors.WARNING, url_host, bcolors.ENDC))
+                    rhui_link = 'https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#the-ips-for-the-rhui-content-delivery-servers'
+                    logging.warning('{}listed in this document {}{}'.format(bcolors.WARNING, rhui_link, bcolors.ENDC))
                     bad_hosts.append(url_host)
                     continue
             except Exception as e:
