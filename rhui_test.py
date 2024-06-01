@@ -355,42 +355,52 @@ def check_rhui_repo_file(path):
 
 
 def check_repos(reposconfig):
-    """ Checks whether the rhui-microsoft-azure-* repository exists and tests connectivity to it"""
+    """ Checks whether the rhui-microsoft-azure-* repository exists and tests whether it's enabled or not."""
     global eus 
 
     logging.debug('{}Entering microsoft_repo(){}'.format(bcolors.BOLD, bcolors.ENDC))
     rhuirepo = '^(rhui-)?microsoft.*'
     eusrepo  = '.*-(eus|e4s)-.*'
     microsoft_reponame = ''
+    enabled_repos = list()
 
     for repo_name in reposconfig.sections():
         if re.match('\[*default\]*', repo_name):
             continue
 
-        if re.match(rhuirepo, repo_name):
-           logging.info('{}Using Microsoft RHUI repository {}{}'.format(bcolors.OKGREEN, repo_name, bcolors.ENDC))
-           microsoft_reponame = repo_name
-        if re.match(eusrepo, repo_name):
-           eus = 1
-
-    try:
-        enabled =  int(reposconfig.get(microsoft_reponame, 'enabled').strip())
- 
-    except configparser.NoOptionError:
-        enabled = 1
+        try:
+            enabled =  int(reposconfig.get(repo_name, 'enabled').strip())
+        except configparser.NoOptionError:
+            enabled = 1
+        
     
-    if not enabled:
-        logging.critical('{}Microsoft RHUI repository not enabled, please enable it with the following command{}'.format(bcolors.FAIL, bcolors.ENDC))
-        logging.critical('{}yum-config-manager --enable {}{}'.format(bcolors.FAIL, repo_name, bcolors.ENDC))
-        exit(1)
-    else:
-        logging.debug('{}Server is using {} repository and it is enabled{}'.format(bcolors.BOLD, repo_name, bcolors.ENDC))
+        if re.match(rhuirepo, repo_name):
+            microsoft_reponame = repo_name
+            if enabled:
+                logging.info('{}Using Microsoft RHUI repository {}{}'.format(bcolors.OKGREEN, repo_name, bcolors.ENDC))
+            else:
+                logging.critical('{}Microsoft RHUI repository not enabled, please enable it with the following command{}'.format(bcolors.FAIL, bcolors.ENDC))
+                logging.critical('{}yum-config-manager --enable {}{}'.format(bcolors.FAIL, repo_name, bcolors.ENDC))
+                exit(1)
 
+        if enabled:
+           # only check enabled repositories 
+           enabled_repos.append(repo_name)
+        else:
+           continue
+
+        if re.match(eusrepo, repo_name):
+            eus = 1
+
+    if not microsoft_reponame:
+        reinstall_link = 'https://learn.microsoft.com/troubleshoot/azure/virtual-machines/linux/troubleshoot-linux-rhui-certificate-issues?source=recommendations&tabs=rhel7-eus%2Crhel7-noneus%2Crhel7-rhel-sap-apps%2Crhel8-rhel-sap-apps%2Crhel9-rhel-sap-apps#solution-2-reinstall-the-eus-non-eus-or-sap-rhui-package'
+        logging.critical('{}Microsoft RHUI repository not found, reinstall the RHUI package following{}{}'.format(bcolors.FAIL, reinstall_link,  bcolors.ENDC))
+       
     if eus:
         if not os.path.exists('/etc/yum/vars/releasever'):
-           logging.critical('{} Server is using EUS repostories but /etc/yum/vars/releasever file not found, please correct and test again{}'.format(bcolors.FAIL, bcolors.ENDC))
-           logging.critical('{} Refer to: https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo{}'.format(bcolors.FAIL, bcolors.ENDC))
-           exit(1)
+            logging.critical('{} Server is using EUS repostories but /etc/yum/vars/releasever file not found, please correct and test again{}'.format(bcolors.FAIL, bcolors.ENDC))
+            logging.critical('{} Refer to: https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo{}'.format(bcolors.FAIL, bcolors.ENDC))
+            exit(1)
 
     if not eus:
         if os.path.exists('/etc/yum/vars/releasever'):
@@ -398,9 +408,42 @@ def check_repos(reposconfig):
             logging.critical('{} Refer to: https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo{}'.format(bcolors.FAIL, bcolors.ENDC))
             exit(1)
 
+     return enabled_repos
 
-def connect_to_repos(reposconfig):
-    """downloads repomd.xml from each enabled repository """
+
+def ip_address_check(host):
+    ''' Checks whether the parameter is within the RHUI4 infrastructure '''
+
+    try:
+        rhui_ip_address = socket.gethostbyname(url_host)
+
+        if rhui_ip_address  in rhui4:
+            logging.debug('{}RHUI host {} points to RHUI4 infrastructure{}'.format(bcolors.OKGREEN, url_host, bcolors.ENDC))
+            return True
+        elif rhui_ip_address in rhui3 + rhuius:
+            reinstall_link = 'https://learn.microsoft.com/troubleshoot/azure/virtual-machines/linux/troubleshoot-linux-rhui-certificate-issues?tabs=rhel7-eus%2Crhel7-noneus%2Crhel7-rhel-sap-apps%2Crhel8-rhel-sap-apps%2Crhel9-rhel-sap-apps#solution-2-reinstall-the-eus-non-eus-or-sap-rhui-package'
+            logging.error('{}RHUI server {} points to decommissioned infrastructure, reinstall the RHUI package{}'.format(bcolors.FAIL, url_host, bcolors.ENDC))
+            logging.error('{}for more detailed information, use: {}{}'.format(bcolors.FAIL, reinstall_link, bcolors.ENDC))
+            bad_hosts.append(url_host)
+            warnings = warnings + 1
+            return False
+        else:
+            logging.critical('{}RHUI server {} points to an invalid destination, validate /etc/hosts file for any invalid static RHUI IPs or reinstall the RHUI package{}'.format(bcolors.FAIL, url_host, bcolors.ENDC))
+            logging.warning('{}Please make sure your server is able to resolve {} to one of the ip addresses{}'.format(bcolors.WARNING, url_host, bcolors.ENDC))
+            rhui_link = 'https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#the-ips-for-the-rhui-content-delivery-servers'
+            logging.warning('{}listed in this document {}{}'.format(bcolors.WARNING, rhui_link, bcolors.ENDC))
+            return False
+    except Exception as e:
+         logging.warning('{}Unable to resolve IP address for host {}{}'.format(bcolors.WARNING, url_host, bcolors.ENDC))
+         logging.warning('{}Please make sure your server is able to resolve {} to one of the ip addresses{}'.format(bcolors.WARNING, url_host, bcolors.ENDC))
+         rhui_link = 'https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#the-ips-for-the-rhui-content-delivery-servers'
+         logging.warning('{}listed in this document {}{}'.format(bcolors.WARNING, rhui_link, bcolors.ENDC))
+         logging.warning(e)
+         return False
+
+def connect_to_repos(reposconfig, check_repos):
+    """Downloads repomd.xml from each enabled repository."""
+
     logging.debug('{}Entering connect_to_repos(){}'.format(bcolors.BOLD, bcolors.ENDC))
     rhuirepo = '^rhui-microsoft.*'
     warnings = 0
@@ -411,17 +454,9 @@ def connect_to_repos(reposconfig):
         logging.critical("{}'socket' python module not found but it is required for this test script, review your python instalation{}".format(bcolors.FAIL, bcolors.ENDC))
         exit(1) 
 
-    for repo_name in reposconfig.sections():
+    for repo_name in check_repos:
 
         if re.match('\[*default\]*', repo_name):
-            continue
-
-        try:
-            enabled = reposconfig.get(repo_name, 'enabled').strip() 
-        except:
-            enabled = 1
-
-        if not enabled:
             continue
 
         try:
@@ -434,36 +469,11 @@ def connect_to_repos(reposconfig):
 
         successes = 0
         for url in baseurl_info:
-            try:
-                url_host = get_host(url)
-                rhui_ip_address = socket.gethostbyname(url_host)
-    
-                if rhui_ip_address  in rhui4:
-                    logging.debug('{}RHUI host {} points to RHUI4 infrastructure{}'.format(bcolors.OKGREEN, url_host, bcolors.ENDC))
+            url_host = get_host(url)
+            if not ip_address_check(url_host)
+                bad_hosts.append(url_host)
+                continue
 
-                elif rhui_ip_address in rhui3 + rhuius:
-                    reinstall_link = 'https://learn.microsoft.com/troubleshoot/azure/virtual-machines/linux/troubleshoot-linux-rhui-certificate-issues?tabs=rhel7-eus%2Crhel7-noneus%2Crhel7-rhel-sap-apps%2Crhel8-rhel-sap-apps%2Crhel9-rhel-sap-apps#solution-2-reinstall-the-eus-non-eus-or-sap-rhui-package'
-                    logging.error('{}RHUI server {} points to decommissioned infrastructure, reinstall the RHUI package{}'.format(bcolors.FAIL, url_host, bcolors.ENDC))
-                    logging.error('{}for more detailed information, use: {}{}'.format(bcolors.FAIL, reinstall_link, bcolors.ENDC))
-                    bad_hosts.append(url_host)
-                    warnings = warnings + 1
-                    continue
-                else:
-                    logging.critical('{}RHUI server {} points to an invalid destination, validate /etc/hosts file for any invalid static RHUI IPs or reinstall the RHUI package{}'.format(bcolors.FAIL, url_host, bcolors.ENDC))
-                    logging.warning('{}Please make sure your server is able to resolve {} to one of the ip addresses{}'.format(bcolors.WARNING, url_host, bcolors.ENDC))
-                    rhui_link = 'https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#the-ips-for-the-rhui-content-delivery-servers'
-                    logging.warning('{}listed in this document {}{}'.format(bcolors.WARNING, rhui_link, bcolors.ENDC))
-                    bad_hosts.append(url_host)
-                    continue
-            except Exception as e:
-                 logging.warning('{}Unable to resolve IP address for host {}{}'.format(bcolors.WARNING, url_host, bcolors.ENDC))
-                 logging.warning('{}Please make sure your server is able to resolve {} to one of the ip addresses{}'.format(bcolors.WARNING, url_host, bcolors.ENDC))
-                 rhui_link = 'https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#the-ips-for-the-rhui-content-delivery-servers'
-                 logging.warning('{}listed in this document {}{}'.format(bcolors.WARNING, rhui_link, bcolors.ENDC))
-                 logging.warning(e)
-                 bad_hosts.append(url_host)
-                 continue
-            
             if connect_to_host(url, reposconfig, repo_name):
                 successes += 1
 
@@ -516,8 +526,8 @@ for package_name in rpm_names():
         expiration_time(data['clientcert'])
 
         reposconfig = check_rhui_repo_file(data['repofile'])
-        check_repos(reposconfig)
-        connect_to_repos(reposconfig)
+        check_repos = check_repos(reposconfig)
+        connect_to_repos(reposconfig, check_repos)
 
 
 logging.critical('{}All communication tests to the RHUI infrastructure have passed, if problems persisit, remove third party repositories and test again{}'.format(bcolors.OKGREEN, bcolors.ENDC))
