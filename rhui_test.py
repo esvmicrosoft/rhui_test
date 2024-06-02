@@ -21,7 +21,7 @@ rhui4 = ['52.136.197.163', '20.225.226.182', '52.142.4.99', '20.248.180.252', '2
 rhuius = ['13.72.186.193', '13.72.14.155', '52.224.249.194']
 system_proxy = dict()
 bad_hosts = list()
-
+ 
 pattern = dict()
 pattern['clientcert'] = r'^/[/a-zA-Z0-9_\-]+\.(crt)$'
 pattern['clientkey']  = r'^/[/a-zA-Z0-9_\-]+\.(pem)$'
