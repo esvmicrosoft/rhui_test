@@ -408,34 +408,40 @@ def check_repos(reposconfig):
             logging.critical('{} Refer to: https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo{}'.format(bcolors.FAIL, bcolors.ENDC))
             exit(1)
 
-     return enabled_repos
+    return enabled_repos
 
 
 def ip_address_check(host):
     ''' Checks whether the parameter is within the RHUI4 infrastructure '''
 
     try:
-        rhui_ip_address = socket.gethostbyname(url_host)
+        import socket
+    except ImportError:
+        logging.critical("{}'socket' python module not found but it is required for this test script, review your python instalation{}".format(bcolors.FAIL, bcolors.ENDC))
+        exit(1) 
+
+    try:
+        rhui_ip_address = socket.gethostbyname(host)
 
         if rhui_ip_address  in rhui4:
-            logging.debug('{}RHUI host {} points to RHUI4 infrastructure{}'.format(bcolors.OKGREEN, url_host, bcolors.ENDC))
+            logging.debug('{}RHUI host {} points to RHUI4 infrastructure{}'.format(bcolors.OKGREEN, host, bcolors.ENDC))
             return True
         elif rhui_ip_address in rhui3 + rhuius:
             reinstall_link = 'https://learn.microsoft.com/troubleshoot/azure/virtual-machines/linux/troubleshoot-linux-rhui-certificate-issues?tabs=rhel7-eus%2Crhel7-noneus%2Crhel7-rhel-sap-apps%2Crhel8-rhel-sap-apps%2Crhel9-rhel-sap-apps#solution-2-reinstall-the-eus-non-eus-or-sap-rhui-package'
-            logging.error('{}RHUI server {} points to decommissioned infrastructure, reinstall the RHUI package{}'.format(bcolors.FAIL, url_host, bcolors.ENDC))
+            logging.error('{}RHUI server {} points to decommissioned infrastructure, reinstall the RHUI package{}'.format(bcolors.FAIL, host, bcolors.ENDC))
             logging.error('{}for more detailed information, use: {}{}'.format(bcolors.FAIL, reinstall_link, bcolors.ENDC))
-            bad_hosts.append(url_host)
+            bad_hosts.append(host)
             warnings = warnings + 1
             return False
         else:
-            logging.critical('{}RHUI server {} points to an invalid destination, validate /etc/hosts file for any invalid static RHUI IPs or reinstall the RHUI package{}'.format(bcolors.FAIL, url_host, bcolors.ENDC))
-            logging.warning('{}Please make sure your server is able to resolve {} to one of the ip addresses{}'.format(bcolors.WARNING, url_host, bcolors.ENDC))
+            logging.critical('{}RHUI server {} points to an invalid destination, validate /etc/hosts file for any invalid static RHUI IPs or reinstall the RHUI package{}'.format(bcolors.FAIL, host, bcolors.ENDC))
+            logging.warning('{}Please make sure your server is able to resolve {} to one of the ip addresses{}'.format(bcolors.WARNING, host, bcolors.ENDC))
             rhui_link = 'https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#the-ips-for-the-rhui-content-delivery-servers'
             logging.warning('{}listed in this document {}{}'.format(bcolors.WARNING, rhui_link, bcolors.ENDC))
             return False
     except Exception as e:
-         logging.warning('{}Unable to resolve IP address for host {}{}'.format(bcolors.WARNING, url_host, bcolors.ENDC))
-         logging.warning('{}Please make sure your server is able to resolve {} to one of the ip addresses{}'.format(bcolors.WARNING, url_host, bcolors.ENDC))
+         logging.warning('{}Unable to resolve IP address for host {}{}'.format(bcolors.WARNING, host, bcolors.ENDC))
+         logging.warning('{}Please make sure your server is able to resolve {} to one of the ip addresses{}'.format(bcolors.WARNING, host, bcolors.ENDC))
          rhui_link = 'https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#the-ips-for-the-rhui-content-delivery-servers'
          logging.warning('{}listed in this document {}{}'.format(bcolors.WARNING, rhui_link, bcolors.ENDC))
          logging.warning(e)
@@ -447,12 +453,6 @@ def connect_to_repos(reposconfig, check_repos):
     logging.debug('{}Entering connect_to_repos(){}'.format(bcolors.BOLD, bcolors.ENDC))
     rhuirepo = '^rhui-microsoft.*'
     warnings = 0
-
-    try:
-        import socket
-    except ImportError:
-        logging.critical("{}'socket' python module not found but it is required for this test script, review your python instalation{}".format(bcolors.FAIL, bcolors.ENDC))
-        exit(1) 
 
     for repo_name in check_repos:
 
@@ -470,7 +470,7 @@ def connect_to_repos(reposconfig, check_repos):
         successes = 0
         for url in baseurl_info:
             url_host = get_host(url)
-            if not ip_address_check(url_host)
+            if not ip_address_check(url_host):
                 bad_hosts.append(url_host)
                 continue
 
