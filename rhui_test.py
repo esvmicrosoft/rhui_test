@@ -285,7 +285,6 @@ def get_proxies(parser_object, mysection):
     ''' gets the proxy from a configparser section object pointd by the proxy variable if defined in the configuration file '''
     proxy_info = dict()
 
-    # proxy_regex = '(^[^:]*)(:(//)(([^:]*)(:([^@]*)){0,1}@){0,1}.*)?'
     proxy_regex = '(^[^:]*):(//)(([^:]*)(:([^@]*)){0,1}@){0,1}.*'
 
     for key in ['proxy', 'proxy_user', 'proxy_password']:
@@ -308,7 +307,7 @@ def get_proxies(parser_object, mysection):
             proxy_match = re.match(proxy_regex, myproxy)
             if proxy_match:
                 scheme = proxy_match.group(1)
-                # proxy_info['scheme'] = scheme
+                # for now ...
                 proxy_info['scheme'] = 'https'
             else:
                 logging.critical('{}Invalid proxy configuration, pleases make sure it is a valid one{}'.format(bcolors.FAIL, bcolors.ENDC))
@@ -533,7 +532,6 @@ logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 yum_dnf_conf = read_yum_dnf_conf()
 system_proxy = get_proxies(yum_dnf_conf,'main')
-logging.debug('{} system_proxy set to {}{}'.format(bcolors.BOLD, system_proxy, bcolors.ENDC))
 
 for package_name in rpm_names():
     data = get_pkg_info(package_name)
