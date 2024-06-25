@@ -63,7 +63,7 @@ def validate_ca_certificates():
     """
     logging.debug('{} Entering validate_ca-certificates() {}'.format(bcolors.BOLD, bcolors.ENDC))
     try:
-        result = subprocess.call("/usr/bin/rpm -V ca-certificates")
+        result = subprocess.call('/usr/bin/rpm -V ca-certificates', shell=True)
     except:
         logging.error('{}Unable to check server side certificates installed on the server{}'.format(bcolors.FAIL, bcolors.ENDC))
         logging.error('{}make sure the ca-certificates package is properly installed{}'.format(bcolors.FAIL, bcolors.ENDC))
@@ -72,6 +72,7 @@ def validate_ca_certificates():
     if result:
         reinstall_ca_bundle_link = 'https://learn.microsoft.com/troubleshoot/azure/virtual-machines/linux/troubleshoot-linux-rhui-certificate-issues?tabs=rhel7-eus%2Crhel7-noneus%2Crhel7-rhel-sap-apps%2Crhel8-rhel-sap-apps%2Crhel9-rhel-sap-apps#solution-4-update-or-reinstall-the-ca-certificates-package'
         logging.error('{}The ca-certificate package is invalid, you can reinstall follow {} to reinstall it manually{}'.format(bcolors.FAIL, reinstall_ca_bundle_link,  bcolors.ENDC))
+        exit(1)
     else:
         return True
 
@@ -109,6 +110,7 @@ def connect_to_host(url, selection, mysection):
     headers = {'content-type': 'application/json'}
     s = requests.Session()
     local_proxy = get_proxies(selection, mysection)
+    logging.debug("{} local_proxy set to: {}{}".format(bcolors.BOLD, local_proxy, bcolors.ENDC))
 
     cert = ()
     try:
@@ -126,6 +128,13 @@ def connect_to_host(url, selection, mysection):
         validate_ca_certificates()
         logging.warning('{}PROBLEM: MITM proxy misconfiguration. Proxy cannot intercept certs for {}{}'.format(bcolors.WARNING, url, bcolors.ENDC))
         return 1
+    except requests.exceptions.ProxyError:
+        logging.warning('{}PROBLEM: Unable to use the proxy gateway when connecting to RHUI server {}{}'.format(bcolors.WARNING, url, bcolors.ENDC))
+        return False
+    except requests.exceptions.ConnectionError as e:
+        logging.warning('{}PROBLEM: Unable establish connectivity to RHUI server {}{}'.format(bcolors.WARNING, url, bcolors.ENDC))
+        logging.error('{} {}{}'.format(bcolors.FAIL, e, bcolors.ENDC))
+        return False
     except OSError:
         validate_ca_certificates()
         raise()
@@ -277,6 +286,7 @@ def get_proxies(parser_object, mysection):
     ''' gets the proxy from a configparser section object pointd by the proxy variable if defined in the configuration file '''
     proxy_info = dict()
 
+    # proxy_regex = '(^[^:]*)(:(//)(([^:]*)(:([^@]*)){0,1}@){0,1}.*)?'
     proxy_regex = '(^[^:]*):(//)(([^:]*)(:([^@]*)){0,1}@){0,1}.*'
 
     for key in ['proxy', 'proxy_user', 'proxy_password']:
@@ -297,8 +307,13 @@ def get_proxies(parser_object, mysection):
             ''' Get the scheme used in a proxy for example http from http://proxy.com/.
                 Have to remove the last : as it is not part of the scheme.            '''
             proxy_match = re.match(proxy_regex, myproxy)
-            scheme = proxy_match.group(1)
-            proxy_info['scheme'] = scheme
+            if proxy_match:
+                scheme = proxy_match.group(1)
+                # proxy_info['scheme'] = scheme
+                proxy_info['scheme'] = 'https'
+            else:
+                logging.critical('{}Invalid proxy configuration, pleases make sure it is a valid one{}'.format(bcolors.FAIL, bcolors.ENDC))
+                exit(1)
         else:
             return system_proxy
     except KeyError:
@@ -519,6 +534,7 @@ logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 yum_dnf_conf = read_yum_dnf_conf()
 system_proxy = get_proxies(yum_dnf_conf,'main')
+logging.debug('{} system_proxy set to {}{}'.format(bcolors.BOLD, system_proxy, bcolors.ENDC))
 
 for package_name in rpm_names():
     data = get_pkg_info(package_name)
