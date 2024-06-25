@@ -110,6 +110,7 @@ def connect_to_host(url, selection, mysection):
     headers = {'content-type': 'application/json'}
     s = requests.Session()
     local_proxy = get_proxies(selection, mysection)
+    logging.debug("{} local_proxy set to: {}{}".format(bcolors.BOLD, local_proxy, bcolors.ENDC))
 
     cert = ()
     try:
@@ -285,6 +286,7 @@ def get_proxies(parser_object, mysection):
     ''' gets the proxy from a configparser section object pointd by the proxy variable if defined in the configuration file '''
     proxy_info = dict()
 
+    # proxy_regex = '(^[^:]*)(:(//)(([^:]*)(:([^@]*)){0,1}@){0,1}.*)?'
     proxy_regex = '(^[^:]*):(//)(([^:]*)(:([^@]*)){0,1}@){0,1}.*'
 
     for key in ['proxy', 'proxy_user', 'proxy_password']:
@@ -307,7 +309,7 @@ def get_proxies(parser_object, mysection):
             proxy_match = re.match(proxy_regex, myproxy)
             if proxy_match:
                 scheme = proxy_match.group(1)
-                # for now ...
+                # proxy_info['scheme'] = scheme
                 proxy_info['scheme'] = 'https'
             else:
                 logging.critical('{}Invalid proxy configuration, pleases make sure it is a valid one{}'.format(bcolors.FAIL, bcolors.ENDC))
@@ -492,7 +494,7 @@ def connect_to_repos(reposconfig, check_repos):
 
         if successes == 0:
             error_link = 'https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel9#the-ips-for-the-rhui-content-delivery-servers'
-            logging.critical('{}PROBLEM: Cannot communicate with any RHUI server, you must allow at least one of the IP addresses listed here {}{}'.format(bcolors.FAIL, error_link, bcolors.ENDC))
+            logging.critical('{}PROBLEM: Unable to establish communication with one of the current RHUI servers, please ensure the server is able to resolve to a valid IP address and communication is allowed to the addresses listed in the public document {}{}'.format(bcolors.FAIL, error_link, bcolors.ENDC))
             sys.exit(1)
 
 
@@ -532,6 +534,7 @@ logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 yum_dnf_conf = read_yum_dnf_conf()
 system_proxy = get_proxies(yum_dnf_conf,'main')
+logging.debug('{} system_proxy set to {}{}'.format(bcolors.BOLD, system_proxy, bcolors.ENDC))
 
 for package_name in rpm_names():
     data = get_pkg_info(package_name)
