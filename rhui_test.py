@@ -110,7 +110,6 @@ def connect_to_host(url, selection, mysection):
     headers = {'content-type': 'application/json'}
     s = requests.Session()
     local_proxy = get_proxies(selection, mysection)
-    logging.debug("{} local_proxy set to: {}{}".format(bcolors.BOLD, local_proxy, bcolors.ENDC))
 
     cert = ()
     try:
