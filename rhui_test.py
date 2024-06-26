@@ -110,7 +110,6 @@ def connect_to_host(url, selection, mysection):
     headers = {'content-type': 'application/json'}
     s = requests.Session()
     local_proxy = get_proxies(selection, mysection)
-    logging.debug("{} local_proxy set to: {}{}".format(bcolors.BOLD, local_proxy, bcolors.ENDC))
 
     cert = ()
     try:
@@ -534,7 +533,6 @@ logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 yum_dnf_conf = read_yum_dnf_conf()
 system_proxy = get_proxies(yum_dnf_conf,'main')
-logging.debug('{} system_proxy set to {}{}'.format(bcolors.BOLD, system_proxy, bcolors.ENDC))
 
 for package_name in rpm_names():
     data = get_pkg_info(package_name)
