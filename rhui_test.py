@@ -62,15 +62,17 @@ def validate_ca_certificates():
     Used to verify whether the default certificate database has been modified or not
     """
     logging.debug('{} Entering validate_ca-certificates() {}'.format(bcolors.BOLD, bcolors.ENDC))
+    reinstall_ca_bundle_link = 'https://learn.microsoft.com/troubleshoot/azure/virtual-machines/linux/troubleshoot-linux-rhui-certificate-issues?tabs=rhel7-eus%2Crhel7-noneus%2Crhel7-rhel-sap-apps%2Crhel8-rhel-sap-apps%2Crhel9-rhel-sap-apps#solution-4-update-or-reinstall-the-ca-certificates-package'
+
     try:
         result = subprocess.call('/usr/bin/rpm -V ca-certificates', shell=True)
     except:
         logging.error('{}Unable to check server side certificates installed on the server{}'.format(bcolors.FAIL, bcolors.ENDC))
-        logging.error('{}make sure the ca-certificates package is properly installed{}'.format(bcolors.FAIL, bcolors.ENDC))
+        logging.error('{} Use {} to reinstall the ca-certificates{}'.format(bcolors.FAIL, reinstall_ca_bundle_link,  bcolors.ENDC))
+        
         exit(1)
    
     if result:
-        reinstall_ca_bundle_link = 'https://learn.microsoft.com/troubleshoot/azure/virtual-machines/linux/troubleshoot-linux-rhui-certificate-issues?tabs=rhel7-eus%2Crhel7-noneus%2Crhel7-rhel-sap-apps%2Crhel8-rhel-sap-apps%2Crhel9-rhel-sap-apps#solution-4-update-or-reinstall-the-ca-certificates-package'
         logging.error('{}The ca-certificate package is invalid, you can reinstall follow {} to reinstall it manually{}'.format(bcolors.FAIL, reinstall_ca_bundle_link,  bcolors.ENDC))
         exit(1)
     else:
@@ -121,7 +123,7 @@ def connect_to_host(url, selection, mysection):
     try:
         r = s.get(url, cert=cert, headers=headers, timeout=5, proxies=local_proxy)
     except requests.exceptions.Timeout:
-        logging.warning('{}PROBLEM: Unable to reach RHUI server, https port is blocked for {}{}'.format(bcolors.WARNING, url, bcolors.ENDC))
+        logging.warning('{}TIMEOUT: Unable to reach RHUI URI {}{}'.format(bcolors.WARNING, url, bcolors.ENDC))
         return False
     except requests.exceptions.SSLError:
         validate_ca_certificates()
@@ -162,7 +164,7 @@ def rpm_names():
             logging.debug('{}Server has this RHUI pkg: {}{}'.format(bcolors.BOLD, rpm, bcolors.ENDC))
         return(rpm_names)
     else:
-        logging.critical('{} could not find a specific RHUI package installed, please eefer to the documentation and install the apropriate one {}'.format(bcolors.FAIL, bcolors.ENDC))
+        logging.critical('{} could not find a specific RHUI package installed, please refer to the documentation and install the apropriate one {}'.format(bcolors.FAIL, bcolors.ENDC))
         logging.critical('{} Consider using the following document to install RHUI support https://learn.microsoft.com/troubleshoot/azure/virtual-machines/troubleshoot-linux-rhui-certificate-issues#cause-3-rhui-package-is-missing {}'.format(bcolors.FAIL, bcolors.ENDC))
         exit(1) 
 
@@ -249,7 +251,7 @@ def expiration_time(cert_path):
         result = subprocess.check_call('openssl x509 -in {} -checkend 0 > /dev/null 2>&1 '.format(cert_path),shell=True)
 
     except subprocess.CalledProcessError:
-        logging.critical('{}Client RHUI Certificate has expired, please update the rhui RPM{}'.format(bcolors.FAIL, bcolors.ENDC))
+        logging.critical('{}Client RHUI Certificate has expired, please update the RHUI rpm{}'.format(bcolors.FAIL, bcolors.ENDC))
         logging.critical('{}Refer to: https://learn.microsoft.com/troubleshoot/azure/virtual-machines/troubleshoot-linux-rhui-certificate-issues#cause-1-rhui-client-certificate-is-expired{}'.format(bcolors.FAIL, bcolors.ENDC))
         exit(1)
 
@@ -311,7 +313,7 @@ def get_proxies(parser_object, mysection):
                 # proxy_info['scheme'] = scheme
                 proxy_info['scheme'] = 'https'
             else:
-                logging.critical('{}Invalid proxy configuration, pleases make sure it is a valid one{}'.format(bcolors.FAIL, bcolors.ENDC))
+                logging.critical('{}Invalid proxy configuration, please make sure it is a valid one{}'.format(bcolors.FAIL, bcolors.ENDC))
                 exit(1)
         else:
             return system_proxy
@@ -523,7 +525,8 @@ args = parser.parse_args()
 
 
 if args.debug:
-    logging.basicConfig(level=logging.DEBUG)
+    # logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
 else:
     logging.basicConfig(level=logging.INFO)
 start_logging()
