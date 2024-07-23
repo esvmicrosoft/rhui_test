@@ -1,54 +1,49 @@
-# RHUI Test script.
+# RHUI Check Script
 
-## Goal
+## Overview
 
-Develop a script to test proper configruation and connectivity to the RHUI repositories in Azure.
+This script validates server configuration and connectivity to the RHUI Servers provided by Azure to the PAYG RHEL images.
+Instead of performing an end-to-end conectivity test, the rhui-check.py performs individual validations of the different components required to have a successful communication 
+to the RHUI servers. Among other things, here are some of the individual tests the script performs.
 
+- Validates the Client Certificate.
+- RHUI rpm consistency.
+- Consistency between EUS and non-EUS repository configuration and their requirements.
+- Connectivity to the RHUI Repositories.
+- SSL connectivity to the RHUI repositories.
+- Focuses exclusively in the RHUI repositories.
 
-Required characteristics:
+## Supported Environments
 
-* It must run on RHEL7, 8 and 9.
-* It must support EUS, E4S and non-EUS repositories.
-* It must not require additional packages other than found in the plain vanilla installations from Marketplace.
-**The python OpenSSL module does not come pre-installed by default**
-
-
-So far this is the list of completed tests:
-
-- RHUI Package installed
-- RHUI repo config file must exist.
-- Client certificate and key must exist.
-- Client certificate expiration time.
-- Microsoft Repository (where the rhui package is installed) must be enabled.
-- At least one RHUI repository enabled. (where the software is installed)
-- The server must be able to download the repomd.xml file from the Microsoft repository and the RHUI ones.
+The script was built to successfully run on plain vanilla RHEL7.9 and later PAYG images but it should run on images with the Azure Hybrid Benefit enabled as well.
 
 
-Tests not yet implemented:
+## Usage
 
-Proper DNS resoultuion of the RHUI servers.
-Test for 404 conditions.
-Valid values for /etc/yum/vars/releasever. (or /etc/dnf/vars....)
-Daily cron job file available.
-Anacron daemon enabled.
-
-## Usage:
-
-Since RHEL7 does not come with python3 pre-installed, at this time it is required to select the python interpreter manually and the script **must** be executed 
-with root privileges.
-
-- RHEL7.x
+### RHEL7.
 
 ```
-sudo python ./rhui_test.py
+python2 <(curl https://raw.githubusercontent.com/Azure/azure-support-scripts/master/Linux-scripts/rhui-check/rhui-check.py)
 ```
 
-- RHEL8.x and above
+Or download and transfer the script to the instance:
+https://raw.githubusercontent.com/Azure/azure-support-scripts/master/Linux_scripts/rhui-check/rhui-check.py
+
+Then run:
+```
+sudo python ./rhui-check.py 
+```
+
+### RHEL8 and above.
 
 ```
-sudo python3 ./rhui_test.py
+python3 <(curl https://raw.githubusercontent.com/Azure/azure-support-scripts/master/Linux-scripts/rhui-check/rhui-check.py)
 ```
 
-*Happy troubleshooting*
+Or download and transfer the script to the instance:
+https://raw.githubusercontent.com/Azure/azure-support-scripts/master/Linux_scripts/rhui-check/rhui-check.py
 
-
+Then run:
+```
+python3 ./rhui-check.py 
+```
