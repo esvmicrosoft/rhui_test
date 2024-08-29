@@ -41,17 +41,6 @@ class localParser(configparser.ConfigParser):
             d[k].pop('__name__', None)
         return d
 
-class bcolors:
-    HEADER = '\033[95m'
-    OKBLUE = '\033[94m'
-    OKCYAN = '\033[96m'
-    OKGREEN = '\033[92m'
-    WARNING = '\033[93m'
-    FAIL = '\033[91m'
-    ENDC = '\033[0m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
-
 def get_host(url):
     urlregex = '[^:]*://([^/]*)/.*'
     host_match = re.match(urlregex, url)
@@ -505,18 +494,25 @@ def connect_to_repos(reposconfig, check_repos):
 ######################################################
 class CustomFormatter(logging.Formatter):
 
-    grey = "\x1b[38;20m"
-    yellow = "\x1b[33;20m"
-    red = "\x1b[31;20m"
+    black =    "\x1b[30;1m"
+    grey =     "\x1b[30;0m"
+    red =      "\x1b[31;20m"
+    green =    "\x1b[32;20m"
+    yellow =   "\x1b[33;20m"
+    bright_red = "\x1b[91;1m"
     bold_red = "\x1b[31;1m"
-    reset = "\x1b[0m"
+    bold_green =    "\x1b[32;1m"
+    bold_yellow =   "\x1b[33;1m"
+    reset =    "\x1b[0m"
+
+
     format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
 
     FORMATS = {
-        logging.DEBUG: grey + format + reset,
-        logging.INFO: grey + format + reset,
-        logging.WARNING: yellow + format + reset,
-        logging.ERROR: red + format + reset,
+        logging.DEBUG: black + format + reset,
+        logging.INFO: bold_green + format + reset,
+        logging.WARNING: bold_yellow + format + reset,
+        logging.ERROR: bright_red + format + reset,
         logging.CRITICAL: bold_red + format + reset
     }
 
@@ -527,18 +523,31 @@ class CustomFormatter(logging.Formatter):
 
 def start_logging():
     """This function sets up the logging configuration for the script and writes the log to /var/log/rhuicheck.log"""
-    log_filename = '/var/log/rhuicheck.log'
-    file_handler = logging.FileHandler(filename=log_filename)
 
+    logger = logging.getLogger(__name__)
 
-    file_handler.setFormatter(CustomFormatter())
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.DEBUG)
-    root_logger.addHandler(file_handler)
+    console_handler = logging.StreamHandler()
+    newFormatter = CustomFormatter()
+    console_handler.setFormatter(newFormatter)    
 
+#    log_filename = '/var/log/rhuicheck.log'
+#    file_handler = logging.FileHandler(filename=log_filename)
+
+    logger.setLevel(logging.DEBUG)
+
+    logger.addHandler(console_handler)
+#     logger.addHandler(file_handler)
+    return logger
+
+logger = start_logging()
 if os.geteuid() != 0:
-   logging.critical('This script needs to execute with root privileges\nPlease use: sudo {}'.format(sys.argv[0]))
+   logger.debug('You could leverage the sudo tool to gain administrative privileges')
+   logger.info('You could leverage the sudo tool to gain administrative privileges')
+   logger.warning('You could leverage the sudo tool to gain administrative privileges')
+   logger.error('You could leverage the sudo tool to gain administrative privileges')
+   logger.critical('This script needs to execute with root privileges')
    exit(1)
+
        
 parser = argparse.ArgumentParser()
 
@@ -553,7 +562,6 @@ if args.debug:
     logging.basicConfig(level=logging.INFO)
 else:
     logging.basicConfig(level=logging.INFO)
-start_logging()
 
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
