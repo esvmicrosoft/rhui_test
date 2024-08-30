@@ -67,7 +67,7 @@ def start_logging(debug_level = False):
     try:
         log_filename = '/var/log/rhuicheck.log'
         file_handler = logging.FileHandler(filename=log_filename)
-        plain_formatter = logging.Formatter("asctime)s - %(name)s - %(levelname)s - %(message)s")
+        plain_formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         file_handler.setFormatter(plain_formatter)    
     except:
         logger.critical("Unable to create log file in /var/log/rhuicheck.log, make sure the script is running with root privileges, the filesystem has enough space and it is not in Read-Only mode")
