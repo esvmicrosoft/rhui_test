@@ -180,7 +180,7 @@ def connect_to_host(url, selection, mysection):
 
     cert = ()
     try:
-        cert=( selection.get(mysection, 'sslclientcert'), selection.get(mysection, 'sslclientkey') )
+        cert=(selection.get(mysection, 'sslclientcert'), selection.get(mysection, 'sslclientkey'))
     except:
         logger.warning('Client certificate and/or client key attribute not found for {}, testing connectivity w/o certificates'.format(mysection))
         cert=()
@@ -212,6 +212,10 @@ def connect_to_host(url, selection, mysection):
         if r.status_code == 200:
             logger.debug('The RC for this {} link is {}'.format(url, r.status_code))
             return True
+        elif r.status_code == 404:
+            logger.error("Unable to find the contents for repo {}, make sure to use the correct version lock if you're using EUS repositories".format(mysection))
+            logger.error("for more detailed information and valid levels consult: https://access.redhat.com/support/policy/updates/errata#RHEL8_and_9_Life_Cycle")
+            return False
         else:
             logger.warning('The RC for this {} link is {}'.format(url, r.status_code))
             return False
@@ -476,6 +480,7 @@ def check_repos(reposconfig):
     if not microsoft_reponame:
         reinstall_link = 'https://learn.microsoft.com/troubleshoot/azure/virtual-machines/linux/troubleshoot-linux-rhui-certificate-issues?source=recommendations&tabs=rhel7-eus%2Crhel7-noneus%2Crhel7-rhel-sap-apps%2Crhel8-rhel-sap-apps%2Crhel9-rhel-sap-apps#solution-2-reinstall-the-eus-non-eus-or-sap-rhui-package'
         logger.critical('Microsoft RHUI repository not found, reinstall the RHUI package following{}'.format(reinstall_link))
+        exit(1)
        
     if eus:
         if not os.path.exists('/etc/yum/vars/releasever'):
