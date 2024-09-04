@@ -39,12 +39,6 @@ sudo python ./rhui-check.py
 ```
 sudo python3 <(curl https://raw.githubusercontent.com/Azure/azure-support-scripts/master/Linux-scripts/rhui-check/rhui-check.py)
 ```
-or 
-
-```
-sudo /usr/libexec/platform-python <(curl https://raw.githubusercontent.com/Azure/azure-support-scripts/master/Linux-scripts/rhui-check/rhui-check.py)
-```
-
 
 Or download and transfer the script to the instance:
 https://raw.githubusercontent.com/Azure/azure-support-scripts/master/Linux_scripts/rhui-check/rhui-check.py
@@ -54,3 +48,5 @@ Then run:
 ```
 sudo python3 ./rhui-check.py 
 ```
+
+**Note:** Replace python3 with /usr/libexec/platform-python if the python3 command is not found.
