@@ -1,5 +1,5 @@
 # RHUI Check Script
- 
+
 ## Overview
 
 This script validates server configuration and connectivity to the RHUI Servers provided by Azure to the PAYG RHEL images.
@@ -22,7 +22,7 @@ The script was built to successfully run on plain vanilla RHEL7.9 and later PAYG
 ### RHEL 7.x
 
 ```
-curl -sL https://raw.githubusercontent.com/Azure/azure-support-scripts/master/Linux-scripts/rhui-check/rhui-check.py | sudo python2 -
+sudo python2 <(curl https://raw.githubusercontent.com/Azure/azure-support-scripts/master/Linux-scripts/rhui-check/rhui-check.py)
 ```
 
 Or download and transfer the script to the instance:
@@ -37,7 +37,7 @@ sudo python ./rhui-check.py
 ### RHEL 8.x, RHEL 9.x and above
 
 ```
-curl -sL https://raw.githubusercontent.com/Azure/azure-support-scripts/master/Linux-scripts/rhui-check/rhui-check.py | sudo python3 -
+sudo python3 <(curl https://raw.githubusercontent.com/Azure/azure-support-scripts/master/Linux-scripts/rhui-check/rhui-check.py)
 ```
 
 Or download and transfer the script to the instance:
