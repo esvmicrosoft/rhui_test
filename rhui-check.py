@@ -183,7 +183,7 @@ def connect_to_host(url, selection, mysection):
     try:
         cert=(selection.get(mysection, 'sslclientcert'), selection.get(mysection, 'sslclientkey'))
     except:
-        logger.warning('Client certificate and/or client key attribute not found for {}, testing connectivity w/o certificates'.format(mysection))
+#         logger.warning('Client certificate and/or client key attribute not found for {}, testing connectivity w/o certificates'.format(mysection))
         cert=()
 
     try:
@@ -542,13 +542,23 @@ def connect_to_repos(reposconfig, check_repos, issues):
     """Downloads repomd.xml from each enabled repository."""
 
     logger.debug('Entering connect_to_repos()')
-    rhuirepo = '^rhui-microsoft.*'
+    # rhuirepo = '^rhui-microsoft.*'
+    rhuirepo = '^(rhui-)?microsoft.*'
+    eusrepo  = '.*-(eus|e4s)-.*'
+
     warnings = 0
 
     for repo_name in check_repos:
 
         if re.match('\[*default\]*', repo_name):
             continue
+
+        # skip checking Software Repositories if the Certificate is invalid.
+        # skip checking EUS repos if releasever file is missing
+        if  \
+               'invalid_cert' in issues and not re.match(rhuirepo, repo_name) \
+            or 'eus_missing'  in issues and re.match(eusrepo, repo_name):
+              continue
 
         try:
             baseurl_info = reposconfig.get(repo_name, 'baseurl').strip().split('\n')
@@ -591,7 +601,7 @@ for package_name in rpm_names():
         cert_active = expiration_time(data['clientcert'])
         if not cert_active:
             failures = True
-            issues['cert'] = 'Not valid'
+            issues['invalid_cert'] = 1
 
         reposconfig = check_rhui_repo_file(data['repofile'])
         check_repos, newissues  = check_repos(reposconfig)
@@ -599,5 +609,9 @@ for package_name in rpm_names():
         connect_to_repos(reposconfig, check_repos, issues)
 
 
-logger.info('All communication tests to the RHUI infrastructure have passed, if problems persisit, remove third party repositories and test again')
-logger.info('The RHUI repository configuration file is {}, move any other configuration file to a temporary location and test again'.format(data['repofile']))
+if issues:
+    exit(1)
+else:
+    logger.info('All communication tests to the RHUI infrastructure have passed, if problems persisit, remove third party repositories and test again')
+    logger.info('The RHUI repository configuration file is {}, move any other configuration file to a temporary location and test again'.format(data['repofile']))
+    exit(0)
