@@ -162,7 +162,7 @@ def connect_to_host(url, selection, mysection):
     except AttributeError:
         baserelease = uname[2]
 
-    if eus:
+    if eus and not 'eus_missing' in issues:
         fd = open('/etc/yum/vars/releasever')
         releasever = fd.readline().strip()
     else:
@@ -451,7 +451,7 @@ def check_repos(reposconfig):
     eusrepo  = '.*-(eus|e4s)-.*'
     microsoft_reponame = ''
     enabled_repos = list()
-    local issues = {}
+    local_issues = {}
 
     for repo_name in reposconfig.sections():
         if re.match('\[*default\]*', repo_name):
@@ -471,7 +471,7 @@ def check_repos(reposconfig):
                 logger.critical('Microsoft RHUI repository not enabled, please enable it with the following command')
                 logger.critical('yum-config-manager --enable {}'.format(repo_name))
                 enabled_repos.append(repo_name)
-                issues['rhuirepo'] = 'not enabled'
+                local_issues['rhuirepo_not_enabled'] = 'not enabled'
 
         if enabled:
            # only check enabled repositories 
@@ -485,21 +485,21 @@ def check_repos(reposconfig):
     if not microsoft_reponame:
         reinstall_link = 'https://learn.microsoft.com/troubleshoot/azure/virtual-machines/linux/troubleshoot-linux-rhui-certificate-issues?source=recommendations&tabs=rhel7-eus%2Crhel7-noneus%2Crhel7-rhel-sap-apps%2Crhel8-rhel-sap-apps%2Crhel9-rhel-sap-apps#solution-2-reinstall-the-eus-non-eus-or-sap-rhui-package'
         logger.critical('Microsoft RHUI repository not found, reinstall the RHUI package following {}'.format(reinstall_link))
-        issues['rhuirepo'] = 'missing'
+        local_issues['rhuirepo_missing'] = 'missing'
        
     if eus:
         if not os.path.exists('/etc/yum/vars/releasever'):
             logger.critical('Server is using EUS repostories but /etc/yum/vars/releasever file not found, please correct and test again')
             logger.critical('Refer to: https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo')
-            issues['eus'] = 'releasever file missing'
+            local_issues['eus_missing'] = 'releasever file missing'
 
     if not eus:
         if os.path.exists('/etc/yum/vars/releasever'):
             logger.critical('Server is using non-EUS repos and /etc/yum/vars/releasever file found, correct and try again')
             logger.critical('Refer to: https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo')
-            issues['eus'] = 'non EUs repos but releasever file present'
+            local_issues['extra_eus'] = 'non EUs repos but releasever file present'
 
-    return [ enabled_repos, issues ]
+    return [ enabled_repos, local_issues ]
 
 
 def ip_address_check(host):
@@ -556,7 +556,8 @@ def connect_to_repos(reposconfig, check_repos, issues):
             reinstall_link = 'https://learn.microsoft.com/troubleshoot/azure/virtual-machines/linux/troubleshoot-linux-rhui-certificate-issues?source=recommendations&tabs=rhel7-eus%2Crhel7-noneus%2Crhel7-rhel-sap-apps%2Crhel8-rhel-sap-apps%2Crhel9-rhel-sap-apps#solution-2-reinstall-the-eus-non-eus-or-sap-rhui-package'
             logger.critical('The baseurl is a critical component of the repository stanza and it is not found for repo {}'.format(repo_name))
             logger.critical('Follow this link to reinstall the Microsoft RHUI repo {}'.format(reinstall_link))
-            exit(1)
+            issues['invalid_repoconfig'] = 1
+            continue
 
         successes = 0
         for url in baseurl_info:
@@ -573,7 +574,8 @@ def connect_to_repos(reposconfig, check_repos, issues):
             logger.critical('PROBLEM: Unable to successfully download repository metadata from the any of the configured RHUI server(s).')
             logger.critical('         please ensure the server is able to resolve to a valid IP address, communication is allowed to the addresses listed in the public document {}'.format(error_link))
             logger.critical('         and, if using EUS repositories, have a valid EUS value in /etc/dnf/vars/releasever file')
-            sys.exit(1)
+            issues['unable_to_connect'] = 1
+            continue
 
 
 
