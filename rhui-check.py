@@ -9,6 +9,7 @@ import time
 import sys
 #import urllib.request
 eus = 0
+issues = {}
 
 ######################################################
 # logger the output of the script into /var/log/rhuicheck.log file
@@ -161,7 +162,7 @@ def connect_to_host(url, selection, mysection):
     except AttributeError:
         baserelease = uname[2]
 
-    if eus:
+    if eus and not 'eus_missing' in issues:
         fd = open('/etc/yum/vars/releasever')
         releasever = fd.readline().strip()
     else:
@@ -182,7 +183,7 @@ def connect_to_host(url, selection, mysection):
     try:
         cert=(selection.get(mysection, 'sslclientcert'), selection.get(mysection, 'sslclientkey'))
     except:
-        logger.warning('Client certificate and/or client key attribute not found for {}, testing connectivity w/o certificates'.format(mysection))
+#         logger.warning('Client certificate and/or client key attribute not found for {}, testing connectivity w/o certificates'.format(mysection))
         cert=()
 
     try:
@@ -322,12 +323,14 @@ def expiration_time(cert_path):
     except subprocess.CalledProcessError:
         logger.critical('Client RHUI Certificate has expired, please update the RHUI rpm')
         logger.critical('Refer to: https://learn.microsoft.com/troubleshoot/azure/virtual-machines/troubleshoot-linux-rhui-certificate-issues#cause-1-rhui-client-certificate-is-expired')
-        exit(1)
+        return False
 
     if not default_policy():
         logger.critical('Client crypto policies not set to DEFAULT')
         logger.critical('Refer to: https://learn.microsoft.com/troubleshoot/azure/virtual-machines/linux/troubleshoot-linux-rhui-certificate-issues?tabs=rhel7-eus%2Crhel7-noneus%2Crhel7-rhel-sap-apps%2Crhel8-rhel-sap-apps%2Crhel9-rhel-sap-apps#cause-5-verification-error-in-rhel-version-8-or-9-ca-certificate-key-too-weak')
-        exit(1) 
+        return False
+
+    return True
 
 def read_yum_dnf_conf():
     """Read /etc/yum.conf or /etc/dnf/dnf.conf searching for proxy information"""
@@ -448,6 +451,7 @@ def check_repos(reposconfig):
     eusrepo  = '.*-(eus|e4s)-.*'
     microsoft_reponame = ''
     enabled_repos = list()
+    local_issues = {}
 
     for repo_name in reposconfig.sections():
         if re.match('\[*default\]*', repo_name):
@@ -466,7 +470,8 @@ def check_repos(reposconfig):
             else:
                 logger.critical('Microsoft RHUI repository not enabled, please enable it with the following command')
                 logger.critical('yum-config-manager --enable {}'.format(repo_name))
-                exit(1)
+                enabled_repos.append(repo_name)
+                local_issues['rhuirepo_not_enabled'] = 'not enabled'
 
         if enabled:
            # only check enabled repositories 
@@ -479,22 +484,22 @@ def check_repos(reposconfig):
 
     if not microsoft_reponame:
         reinstall_link = 'https://learn.microsoft.com/troubleshoot/azure/virtual-machines/linux/troubleshoot-linux-rhui-certificate-issues?source=recommendations&tabs=rhel7-eus%2Crhel7-noneus%2Crhel7-rhel-sap-apps%2Crhel8-rhel-sap-apps%2Crhel9-rhel-sap-apps#solution-2-reinstall-the-eus-non-eus-or-sap-rhui-package'
-        logger.critical('Microsoft RHUI repository not found, reinstall the RHUI package following{}'.format(reinstall_link))
-        exit(1)
+        logger.critical('Microsoft RHUI repository not found, reinstall the RHUI package following {}'.format(reinstall_link))
+        local_issues['rhuirepo_missing'] = 'missing'
        
     if eus:
         if not os.path.exists('/etc/yum/vars/releasever'):
             logger.critical('Server is using EUS repostories but /etc/yum/vars/releasever file not found, please correct and test again')
             logger.critical('Refer to: https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo')
-            exit(1)
+            local_issues['eus_missing'] = 'releasever file missing'
 
     if not eus:
         if os.path.exists('/etc/yum/vars/releasever'):
             logger.critical('Server is using non-EUS repos and /etc/yum/vars/releasever file found, correct and try again')
             logger.critical('Refer to: https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel7#rhel-eus-and-version-locking-rhel-vms, to select the appropriate RHUI repo')
-            exit(1)
+            local_issues['extra_eus'] = 'non EUs repos but releasever file present'
 
-    return enabled_repos
+    return [ enabled_repos, local_issues ]
 
 
 def ip_address_check(host):
@@ -533,11 +538,14 @@ def ip_address_check(host):
          logger.warning(e)
          return False
 
-def connect_to_repos(reposconfig, check_repos):
+def connect_to_repos(reposconfig, check_repos, issues):
     """Downloads repomd.xml from each enabled repository."""
 
     logger.debug('Entering connect_to_repos()')
-    rhuirepo = '^rhui-microsoft.*'
+    # rhuirepo = '^rhui-microsoft.*'
+    rhuirepo = '^(rhui-)?microsoft.*'
+    eusrepo  = '.*-(eus|e4s)-.*'
+
     warnings = 0
 
     for repo_name in check_repos:
@@ -545,13 +553,21 @@ def connect_to_repos(reposconfig, check_repos):
         if re.match('\[*default\]*', repo_name):
             continue
 
+        # skip checking Software Repositories if the Certificate is invalid.
+        # skip checking EUS repos if releasever file is missing
+        if  \
+               'invalid_cert' in issues and not re.match(rhuirepo, repo_name) \
+            or 'eus_missing'  in issues and re.match(eusrepo, repo_name):
+              continue
+
         try:
             baseurl_info = reposconfig.get(repo_name, 'baseurl').strip().split('\n')
         except configparser.NoOptionError:
             reinstall_link = 'https://learn.microsoft.com/troubleshoot/azure/virtual-machines/linux/troubleshoot-linux-rhui-certificate-issues?source=recommendations&tabs=rhel7-eus%2Crhel7-noneus%2Crhel7-rhel-sap-apps%2Crhel8-rhel-sap-apps%2Crhel9-rhel-sap-apps#solution-2-reinstall-the-eus-non-eus-or-sap-rhui-package'
             logger.critical('The baseurl is a critical component of the repository stanza and it is not found for repo {}'.format(repo_name))
             logger.critical('Follow this link to reinstall the Microsoft RHUI repo {}'.format(reinstall_link))
-            exit(1)
+            issues['invalid_repoconfig'] = 1
+            continue
 
         successes = 0
         for url in baseurl_info:
@@ -568,7 +584,8 @@ def connect_to_repos(reposconfig, check_repos):
             logger.critical('PROBLEM: Unable to successfully download repository metadata from the any of the configured RHUI server(s).')
             logger.critical('         please ensure the server is able to resolve to a valid IP address, communication is allowed to the addresses listed in the public document {}'.format(error_link))
             logger.critical('         and, if using EUS repositories, have a valid EUS value in /etc/dnf/vars/releasever file')
-            sys.exit(1)
+            issues['unable_to_connect'] = 1
+            continue
 
 
 
@@ -581,12 +598,20 @@ system_proxy = get_proxies(yum_dnf_conf,'main')
 for package_name in rpm_names():
     data = get_pkg_info(package_name)
     if verify_pkg_info(package_name, data):
-        expiration_time(data['clientcert'])
+        cert_active = expiration_time(data['clientcert'])
+        if not cert_active:
+            failures = True
+            issues['invalid_cert'] = 1
 
         reposconfig = check_rhui_repo_file(data['repofile'])
-        check_repos = check_repos(reposconfig)
-        connect_to_repos(reposconfig, check_repos)
+        check_repos, newissues  = check_repos(reposconfig)
+        issues.update(newissues) 
+        connect_to_repos(reposconfig, check_repos, issues)
 
 
-logger.info('All communication tests to the RHUI infrastructure have passed, if problems persisit, remove third party repositories and test again')
-logger.info('The RHUI repository configuration file is {}, move any other configuration file to a temporary location and test again'.format(data['repofile']))
+if issues:
+    exit(1)
+else:
+    logger.info('All communication tests to the RHUI infrastructure have passed, if problems persisit, remove third party repositories and test again')
+    logger.info('The RHUI repository configuration file is {}, move any other configuration file to a temporary location and test again'.format(data['repofile']))
+    exit(0)
