@@ -145,6 +145,9 @@ def validate_ca_certificates():
         return True
 
 def connect_to_host(url, selection, mysection):
+    from string import Template
+
+    temp_url = Template(url)
 
     try:
         uname = os.uname()
@@ -170,9 +173,11 @@ def connect_to_host(url, selection, mysection):
         if releasever == '7':
             releasever = '7Server'
 
-    url = url+"/repodata/repomd.xml"
-    url = url.replace('$releasever',releasever)
-    url = url.replace('$basearch',basearch)
+    mydict = dict(releasever=releasever, basearch=basearch, arch=basearch)
+
+    newurl = temp_url.substitute(mydict)
+    url = newurl+"/repodata/repomd.xml"
+
     logger.debug('baseurl for repo {} is {}'.format(mysection, url))
 
     headers = {'content-type': 'application/json'}
@@ -194,7 +199,7 @@ def connect_to_host(url, selection, mysection):
     except requests.exceptions.SSLError:
         validate_ca_certificates()
         logger.warning('PROBLEM: MITM proxy misconfiguration. Proxy cannot intercept certs for {}'.format(url))
-        return 1
+        return False
     except requests.exceptions.ProxyError:
         logger.warning('PROBLEM: Unable to use the proxy gateway when connecting to RHUI server {}'.format(url))
         return False
@@ -605,9 +610,9 @@ for package_name in rpm_names():
             issues['invalid_cert'] = 1
 
         reposconfig = check_rhui_repo_file(data['repofile'])
-        check_repos, newissues  = check_repos(reposconfig)
+        enabled_repos, newissues  = check_repos(reposconfig)
         issues.update(newissues) 
-        connect_to_repos(reposconfig, check_repos, issues)
+        connect_to_repos(reposconfig, enabled_repos, issues)
 
 
 if issues:
