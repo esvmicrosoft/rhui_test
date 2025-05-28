@@ -467,7 +467,7 @@ def check_repos(reposconfig):
     local_issues = {}
 
     for repo_name in reposconfig.sections():
-        if re.match('\[*default\]*', repo_name):
+        if re.match(r'\[*default\]*', repo_name):
             continue
 
         try:
@@ -563,7 +563,7 @@ def connect_to_repos(reposconfig, check_repos, issues):
 
     for repo_name in check_repos:
 
-        if re.match('\[*default\]*', repo_name):
+        if re.match(r'\[*default\]*', repo_name):
             continue
 
         # skip checking Software Repositories if the Certificate is invalid.
