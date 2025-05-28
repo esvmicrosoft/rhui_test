@@ -148,6 +148,7 @@ def connect_to_host(url, selection, mysection):
     from string import Template
 
     temp_url = Template(url)
+    url_host = get_host(url)
 
     try:
         uname = os.uname()
@@ -195,23 +196,28 @@ def connect_to_host(url, selection, mysection):
         r = s.get(url, cert=cert, headers=headers, timeout=5, proxies=local_proxy)
     except requests.exceptions.Timeout:
         logger.warning('TIMEOUT: Unable to reach RHUI URI {}'.format(url))
+        bad_hosts.append(url_host)
         return False
     except requests.exceptions.SSLError:
         validate_ca_certificates()
         logger.warning('PROBLEM: MITM proxy misconfiguration. Proxy cannot intercept certs for {}'.format(url))
+        bad_hosts.append(url_host)
         return False
     except requests.exceptions.ProxyError:
         logger.warning('PROBLEM: Unable to use the proxy gateway when connecting to RHUI server {}'.format(url))
+        bad_hosts.append(url_host)
         return False
     except requests.exceptions.ConnectionError as e:
         logger.warning('PROBLEM: Unable to establish connectivity to RHUI server {}'.format(url))
         logger.error('{}'.format(e))
+        bad_hosts.append(url_host)
         return False
     except OSError:
         validate_ca_certificates()
         raise()
     except Exception as e:
         logger.warning('PROBLEM: Unknown error, unable to connect to the RHUI server {}'.format(url))
+        bad_hosts.append(url_host)
         raise(e)
         return False
     else:
@@ -221,9 +227,11 @@ def connect_to_host(url, selection, mysection):
         elif r.status_code == 404:
             logger.error("Unable to find the contents for repo {}, make sure to use the correct version lock if you're using EUS repositories".format(mysection))
             logger.error("For more detailed information and valid levels consult: https://access.redhat.com/support/policy/updates/errata#RHEL8_and_9_Life_Cycle")
+            bad_hosts.append(url_host)
             return False
         else:
             logger.warning('The RC for this {} link is {}'.format(url, r.status_code))
+            bad_hosts.append(url_host)
             return False
 
 def rpm_names():
@@ -582,7 +590,7 @@ def connect_to_repos(reposconfig, check_repos, issues):
                 bad_hosts.append(url_host)
                 continue
 
-            if connect_to_host(url, reposconfig, repo_name):
+            if url_host not in bad_hosts  and connect_to_host(url, reposconfig, repo_name):
                 successes += 1
 
         if successes == 0:
