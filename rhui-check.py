@@ -59,8 +59,9 @@ def start_logging(debug_level = False):
     console_handler = logging.StreamHandler()
     color_formatter = CustomFormatter()
     console_handler.setFormatter(color_formatter)    
-    logger.addHandler(console_handler)
     console_handler.setLevel(logging.INFO)
+
+    logger.addHandler(console_handler)
 
     if debug_level:
         console_handler.setLevel(logging.DEBUG)
@@ -189,7 +190,6 @@ def connect_to_host(url, selection, mysection):
     try:
         cert=(selection.get(mysection, 'sslclientcert'), selection.get(mysection, 'sslclientkey'))
     except:
-#######  major point to discuss       logger.warning('Client certificate and/or client key attribute not found for {}, testing connectivity w/o certificates'.format(mysection))
         cert=()
 
     try:
@@ -584,6 +584,7 @@ def connect_to_repos(reposconfig, check_repos, issues):
             continue
 
         successes = 0
+        logger.info('Testing connectivity to repository: {}'.format(repo_name))
         for url in baseurl_info:
             url_host = get_host(url)
             if not ip_address_check(url_host):
@@ -595,7 +596,7 @@ def connect_to_repos(reposconfig, check_repos, issues):
 
         if successes == 0:
             error_link = 'https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel9#the-ips-for-the-rhui-content-delivery-servers'
-            logger.critical('PROBLEM: Unable to successfully download repository metadata from the any of the configured RHUI server(s).')
+            logger.critical('PROBLEM: Unable to successfully download repository metadata from any of the configured RHUI server(s).')
             logger.critical('         Ensure the server is able to resolve to a valid IP address, the communication is allowed to the IP addresses listed in the public document {}'.format(error_link))
             logger.critical('         and if you are using EUS repositories, make sure you have a valid EUS version value in /etc/dnf/vars/releasever file.')
             issues['unable_to_connect'] = 1
