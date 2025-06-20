@@ -596,7 +596,7 @@ def connect_to_repos(reposconfig, check_repos, issues):
 
         if successes == 0:
             error_link = 'https://learn.microsoft.com/azure/virtual-machines/workloads/redhat/redhat-rhui?tabs=rhel9#the-ips-for-the-rhui-content-delivery-servers'
-            logger.critical('PROBLEM: Unable to successfully download repository metadata from any of the configured RHUI server(s).')
+            logger.critical('PROBLEM: Unable to download repository metadata from any of the configured RHUI server(s).')
             logger.critical('         Ensure the server is able to resolve to a valid IP address, the communication is allowed to the IP addresses listed in the public document {}'.format(error_link))
             logger.critical('         and if you are using EUS repositories, make sure you have a valid EUS version value in /etc/dnf/vars/releasever file.')
             issues['unable_to_connect'] = 1
