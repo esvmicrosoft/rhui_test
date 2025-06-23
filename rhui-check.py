@@ -128,32 +128,6 @@ except Exception as e:
     logger.critical(e)
     raise
 
-
-rhui3 = ['13.91.47.76', '40.85.190.91', '52.187.75.218']
-rhui4 = ['52.136.197.163', '20.225.226.182', '52.142.4.99', '20.248.180.252', '20.24.186.80']
-rhuius = ['13.72.186.193', '13.72.14.155', '52.224.249.194']
-system_proxy = dict()
-bad_hosts = list()
- 
-pattern = dict()
-pattern['clientcert'] = r'^/[/a-zA-Z0-9_\-]+\.(crt)$'
-pattern['clientkey']  = r'^/[/a-zA-Z0-9_\-]+\.(pem)$'
-pattern['repofile']    = r'^/[/a-zA-Z0-9_\-\.]+\.(repo)$'
-
-
-try:
-    import configparser
-except ImportError:
-    import ConfigParser as configparser
-
-class localParser(configparser.ConfigParser):
-    def as_dict(self):
-        d = dict(self.sections)
-        for k in d:
-            d[k] = dict(self._defaults, **d[k])
-            d[k].pop('__name__', None)
-        return d
-
 def connect_to_host(url, selection, mysection):
     from string import Template
 
@@ -376,7 +350,6 @@ def read_yum_dnf_conf():
 
     return yumdnfdotconf
 
-
 def get_proxies(parser_object, mysection):
     ''' gets the proxy from a configparser section object pointd by the proxy variable if defined in the configuration file '''
     proxy_info = dict()
@@ -437,7 +410,6 @@ def get_proxies(parser_object, mysection):
     logger.critical('Found proxy information in the config files, make sure connectivity works through the proxy.')
     return {proxy_info['scheme']: myproxy}
     
-
 def check_rhui_repo_file(path):
     """ 
     Handling the consistency of the Red Hat repositories
@@ -462,7 +434,6 @@ def check_rhui_repo_file(path):
     except configparser.ParsingError:
         logger.critical('{} does not follow standard REPO config format, reinstall the RHUI rpm and try again.'.format(path))
         exit(1)
-
 
 def check_repos(reposconfig):
     """ Checks whether the rhui-microsoft-azure-* repository exists and tests whether it's enabled or not."""
@@ -522,7 +493,6 @@ def check_repos(reposconfig):
             local_issues['extra_eus'] = 'non EUs repos but releasever file present'
 
     return [ enabled_repos, local_issues ]
-
 
 def ip_address_check(host):
     ''' Checks whether the parameter is within the RHUI4 infrastructure '''
@@ -611,6 +581,30 @@ def connect_to_repos(reposconfig, check_repos, issues):
             issues['unable_to_connect'] = 1
             continue
 
+rhui3 = ['13.91.47.76', '40.85.190.91', '52.187.75.218']
+rhui4 = ['52.136.197.163', '20.225.226.182', '52.142.4.99', '20.248.180.252', '20.24.186.80']
+rhuius = ['13.72.186.193', '13.72.14.155', '52.224.249.194']
+system_proxy = dict()
+bad_hosts = list()
+ 
+pattern = dict()
+pattern['clientcert'] = r'^/[/a-zA-Z0-9_\-]+\.(crt)$'
+pattern['clientkey']  = r'^/[/a-zA-Z0-9_\-]+\.(pem)$'
+pattern['repofile']    = r'^/[/a-zA-Z0-9_\-\.]+\.(repo)$'
+
+
+try:
+    import configparser
+except ImportError:
+    import ConfigParser as configparser
+
+class localParser(configparser.ConfigParser):
+    def as_dict(self):
+        d = dict(self.sections)
+        for k in d:
+            d[k] = dict(self._defaults, **d[k])
+            d[k].pop('__name__', None)
+        return d
 
 
 logging.getLogger("requests").setLevel(logging.WARNING)
