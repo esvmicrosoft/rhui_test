@@ -46,11 +46,6 @@ class CustomFormatter(logging.Formatter):
 
 
 
-if os.geteuid() != 0:
-   logger.critical('This script needs to execute with root privileges')
-   logger.critical('You could leverage the sudo tool to gain administrative privileges')
-   exit(1)
-
 def start_logging(debug_level = False):
     """This function sets up the logging configuration for the script and writes the log to /var/log/rhuicheck.log"""
 
@@ -106,27 +101,6 @@ def validate_ca_certificates():
         exit(1)
     else:
         return True
-
-parser = argparse.ArgumentParser()
-parser.add_argument(  '--debug','-d',
-                      action='store_true',
-                      help='Use DEBUG level')
-args = parser.parse_args()
-logger = start_logging(args.debug)
-
-try:
-    import requests
-except ImportError:
-    logger.critical("'requests' python module not found, but it's required for this test script, review your python installation.")
-    exit(1) 
-except Exception as e:
-    # It seems requests module requires ca-certificates in newer versions of RHEL/python.
-    # rhel10/python3.12(?) 
-    logger.critical("Unable to import 'requests' module")
-    # check if it is due to issues with the ca-certificates package.
-    validate_ca_certificates()
-    logger.critical(e)
-    raise
 
 def connect_to_host(url, selection, mysection):
     from string import Template
@@ -592,6 +566,31 @@ pattern['clientcert'] = r'^/[/a-zA-Z0-9_\-]+\.(crt)$'
 pattern['clientkey']  = r'^/[/a-zA-Z0-9_\-]+\.(pem)$'
 pattern['repofile']    = r'^/[/a-zA-Z0-9_\-\.]+\.(repo)$'
 
+if os.geteuid() != 0:
+   logging.critical('This script needs to execute with root privileges')
+   logging.critical('You could leverage the sudo tool to gain administrative privileges')
+   exit(1)
+
+parser = argparse.ArgumentParser()
+parser.add_argument(  '--debug','-d',
+                      action='store_true',
+                      help='Use DEBUG level')
+args = parser.parse_args()
+logger = start_logging(args.debug)
+
+try:
+    import requests
+except ImportError:
+    logger.critical("'requests' python module not found, but it's required for this test script, review your python installation.")
+    exit(1) 
+except Exception as e:
+    # It seems requests module requires ca-certificates in newer versions of RHEL/python.
+    # rhel10/python3.12(?) 
+    logger.critical("Unable to import 'requests' module")
+    # check if it is due to issues with the ca-certificates package.
+    validate_ca_certificates()
+    logger.critical(e)
+    raise
 
 try:
     import configparser
