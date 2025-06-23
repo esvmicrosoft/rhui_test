@@ -46,11 +46,6 @@ class CustomFormatter(logging.Formatter):
 
 
 
-if os.geteuid() != 0:
-   logger.critical('This script needs to execute with root privileges')
-   logger.critical('You could leverage the sudo tool to gain administrative privileges')
-   exit(1)
-
 def start_logging(debug_level = False):
     """This function sets up the logging configuration for the script and writes the log to /var/log/rhuicheck.log"""
 
@@ -81,44 +76,6 @@ def start_logging(debug_level = False):
     logger.setLevel(logging.DEBUG)
     return logger
        
-parser = argparse.ArgumentParser()
-parser.add_argument(  '--debug','-d',
-                      action='store_true',
-                      help='Use DEBUG level')
-args = parser.parse_args()
-logger = start_logging(args.debug)
-
-try:
-    import requests
-except ImportError:
-    logger.critical("'requests' python module not found, but it's required for this test script, review your python installation.")
-    exit(1) 
-
-rhui3 = ['13.91.47.76', '40.85.190.91', '52.187.75.218']
-rhui4 = ['52.136.197.163', '20.225.226.182', '52.142.4.99', '20.248.180.252', '20.24.186.80']
-rhuius = ['13.72.186.193', '13.72.14.155', '52.224.249.194']
-system_proxy = dict()
-bad_hosts = list()
- 
-pattern = dict()
-pattern['clientcert'] = r'^/[/a-zA-Z0-9_\-]+\.(crt)$'
-pattern['clientkey']  = r'^/[/a-zA-Z0-9_\-]+\.(pem)$'
-pattern['repofile']    = r'^/[/a-zA-Z0-9_\-\.]+\.(repo)$'
-
-
-try:
-    import configparser
-except ImportError:
-    import ConfigParser as configparser
-
-class localParser(configparser.ConfigParser):
-    def as_dict(self):
-        d = dict(self.sections)
-        for k in d:
-            d[k] = dict(self._defaults, **d[k])
-            d[k].pop('__name__', None)
-        return d
-
 def get_host(url):
     urlregex = '[^:]*://([^/]*)/.*'
     host_match = re.match(urlregex, url)
@@ -128,11 +85,11 @@ def validate_ca_certificates():
     """
     Used to verify whether the default certificate database has been modified or not
     """
-    logger.debug('Entering validate_ca-certificates()')
+    logger.debug('Entering validate_ca_certificates()')
     reinstall_ca_bundle_link = 'https://learn.microsoft.com/troubleshoot/azure/virtual-machines/linux/troubleshoot-linux-rhui-certificate-issues?tabs=rhel7-eus%2Crhel7-noneus%2Crhel7-rhel-sap-apps%2Crhel8-rhel-sap-apps%2Crhel9-rhel-sap-apps#solution-4-update-or-reinstall-the-ca-certificates-package'
 
     try:
-        result = subprocess.call('/usr/bin/rpm -V ca-certificates', shell=True)
+        result = subprocess.call('/usr/bin/rpm -V ca-certificates', shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     except:
         logger.error('Unable to check server side certificates installed in the server.')
         logger.error('Use {} to reinstall the ca-certificates'.format(reinstall_ca_bundle_link))
@@ -367,7 +324,6 @@ def read_yum_dnf_conf():
 
     return yumdnfdotconf
 
-
 def get_proxies(parser_object, mysection):
     ''' gets the proxy from a configparser section object pointd by the proxy variable if defined in the configuration file '''
     proxy_info = dict()
@@ -428,7 +384,6 @@ def get_proxies(parser_object, mysection):
     logger.critical('Found proxy information in the config files, make sure connectivity works through the proxy.')
     return {proxy_info['scheme']: myproxy}
     
-
 def check_rhui_repo_file(path):
     """ 
     Handling the consistency of the Red Hat repositories
@@ -453,7 +408,6 @@ def check_rhui_repo_file(path):
     except configparser.ParsingError:
         logger.critical('{} does not follow standard REPO config format, reinstall the RHUI rpm and try again.'.format(path))
         exit(1)
-
 
 def check_repos(reposconfig):
     """ Checks whether the rhui-microsoft-azure-* repository exists and tests whether it's enabled or not."""
@@ -513,7 +467,6 @@ def check_repos(reposconfig):
             local_issues['extra_eus'] = 'non EUs repos but releasever file present'
 
     return [ enabled_repos, local_issues ]
-
 
 def ip_address_check(host):
     ''' Checks whether the parameter is within the RHUI4 infrastructure '''
@@ -602,6 +555,55 @@ def connect_to_repos(reposconfig, check_repos, issues):
             issues['unable_to_connect'] = 1
             continue
 
+rhui3 = ['13.91.47.76', '40.85.190.91', '52.187.75.218']
+rhui4 = ['52.136.197.163', '20.225.226.182', '52.142.4.99', '20.248.180.252', '20.24.186.80']
+rhuius = ['13.72.186.193', '13.72.14.155', '52.224.249.194']
+system_proxy = dict()
+bad_hosts = list()
+ 
+pattern = dict()
+pattern['clientcert'] = r'^/[/a-zA-Z0-9_\-]+\.(crt)$'
+pattern['clientkey']  = r'^/[/a-zA-Z0-9_\-]+\.(pem)$'
+pattern['repofile']    = r'^/[/a-zA-Z0-9_\-\.]+\.(repo)$'
+
+if os.geteuid() != 0:
+   logging.critical('This script needs to execute with root privileges')
+   logging.critical('You could leverage the sudo tool to gain administrative privileges')
+   exit(1)
+
+parser = argparse.ArgumentParser()
+parser.add_argument(  '--debug','-d',
+                      action='store_true',
+                      help='Use DEBUG level')
+args = parser.parse_args()
+logger = start_logging(args.debug)
+
+try:
+    import requests
+except ImportError:
+    logger.critical("'requests' python module not found, but it's required for this test script, review your python installation.")
+    exit(1) 
+except Exception as e:
+    # It seems requests module requires ca-certificates in newer versions of RHEL/python.
+    # rhel10/python3.12(?) 
+    logger.critical("Unable to import 'requests' module")
+    # check if it is due to issues with the ca-certificates package.
+    validate_ca_certificates()
+    logger.critical(e)
+    raise
+
+try:
+    import configparser
+except ImportError:
+    import ConfigParser as configparser
+
+class localParser(configparser.ConfigParser):
+    def as_dict(self):
+        d = dict(self.sections)
+        for k in d:
+            d[k] = dict(self._defaults, **d[k])
+            d[k].pop('__name__', None)
+        return d
 
 
 logging.getLogger("requests").setLevel(logging.WARNING)
