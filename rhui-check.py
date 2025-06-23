@@ -81,6 +81,32 @@ def start_logging(debug_level = False):
     logger.setLevel(logging.DEBUG)
     return logger
        
+def get_host(url):
+    urlregex = '[^:]*://([^/]*)/.*'
+    host_match = re.match(urlregex, url)
+    return host_match.group(1)
+
+def validate_ca_certificates():
+    """
+    Used to verify whether the default certificate database has been modified or not
+    """
+    logger.debug('Entering validate_ca_certificates()')
+    reinstall_ca_bundle_link = 'https://learn.microsoft.com/troubleshoot/azure/virtual-machines/linux/troubleshoot-linux-rhui-certificate-issues?tabs=rhel7-eus%2Crhel7-noneus%2Crhel7-rhel-sap-apps%2Crhel8-rhel-sap-apps%2Crhel9-rhel-sap-apps#solution-4-update-or-reinstall-the-ca-certificates-package'
+
+    try:
+        result = subprocess.call('/usr/bin/rpm -V ca-certificates', shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except:
+        logger.error('Unable to check server side certificates installed in the server.')
+        logger.error('Use {} to reinstall the ca-certificates'.format(reinstall_ca_bundle_link))
+        
+        exit(1)
+   
+    if result:
+        logger.error('The ca-certificate package is invalid, you can reinstall it. Follow {} to reinstall it manually'.format(reinstall_ca_bundle_link))
+        exit(1)
+    else:
+        return True
+
 parser = argparse.ArgumentParser()
 parser.add_argument(  '--debug','-d',
                       action='store_true',
@@ -93,6 +119,15 @@ try:
 except ImportError:
     logger.critical("'requests' python module not found, but it's required for this test script, review your python installation.")
     exit(1) 
+except Exception as e:
+    # It seems requests module requires ca-certificates in newer versions of RHEL/python.
+    # rhel10/python3.12(?) 
+    logger.critical("Unable to import 'requests' module")
+    # check if it is due to issues with the ca-certificates package.
+    validate_ca_certificates()
+    logger.critical(e)
+    raise
+
 
 rhui3 = ['13.91.47.76', '40.85.190.91', '52.187.75.218']
 rhui4 = ['52.136.197.163', '20.225.226.182', '52.142.4.99', '20.248.180.252', '20.24.186.80']
@@ -118,32 +153,6 @@ class localParser(configparser.ConfigParser):
             d[k] = dict(self._defaults, **d[k])
             d[k].pop('__name__', None)
         return d
-
-def get_host(url):
-    urlregex = '[^:]*://([^/]*)/.*'
-    host_match = re.match(urlregex, url)
-    return host_match.group(1)
-
-def validate_ca_certificates():
-    """
-    Used to verify whether the default certificate database has been modified or not
-    """
-    logger.debug('Entering validate_ca-certificates()')
-    reinstall_ca_bundle_link = 'https://learn.microsoft.com/troubleshoot/azure/virtual-machines/linux/troubleshoot-linux-rhui-certificate-issues?tabs=rhel7-eus%2Crhel7-noneus%2Crhel7-rhel-sap-apps%2Crhel8-rhel-sap-apps%2Crhel9-rhel-sap-apps#solution-4-update-or-reinstall-the-ca-certificates-package'
-
-    try:
-        result = subprocess.call('/usr/bin/rpm -V ca-certificates', shell=True)
-    except:
-        logger.error('Unable to check server side certificates installed in the server.')
-        logger.error('Use {} to reinstall the ca-certificates'.format(reinstall_ca_bundle_link))
-        
-        exit(1)
-   
-    if result:
-        logger.error('The ca-certificate package is invalid, you can reinstall it. Follow {} to reinstall it manually'.format(reinstall_ca_bundle_link))
-        exit(1)
-    else:
-        return True
 
 def connect_to_host(url, selection, mysection):
     from string import Template
