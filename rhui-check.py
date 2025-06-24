@@ -1,4 +1,4 @@
-#!/bin/env bash
+#!/usr/libexec/platform-python
 
 import argparse
 import logging
@@ -77,7 +77,7 @@ def start_logging(debug_level = False):
     return logger
        
 def get_host(url):
-    urlregex = '[^:]*://([^/]*)/.*'
+    urlregex = r'[^:]*://([^/]*)/.*'
     host_match = re.match(urlregex, url)
     return host_match.group(1)
 
@@ -328,8 +328,7 @@ def get_proxies(parser_object, mysection):
     ''' gets the proxy from a configparser section object pointd by the proxy variable if defined in the configuration file '''
     proxy_info = dict()
 
-    # proxy_regex = '(^[^:]*)(:(//)(([^:]*)(:([^@]*)){0,1}@){0,1}.*)?'
-    proxy_regex = '(^[^:]*):(//)(([^:]*)(:([^@]*)){0,1}@){0,1}.*'
+    proxy_regex = r'(^[^:]*):(//)(([^:]*)(:([^@]*)){0,1}@){0,1}.*'
 
     for key in ['proxy', 'proxy_user', 'proxy_password']:
         try:
@@ -414,8 +413,8 @@ def check_repos(reposconfig):
     global eus 
 
     logger.debug('Entering microsoft_repo()')
-    rhuirepo = '^(rhui-)?microsoft.*'
-    eusrepo  = '.*-(eus|e4s)-.*'
+    rhuirepo = r'^(rhui-)?microsoft.*'
+    eusrepo  = r'.*-(eus|e4s)-.*'
     microsoft_reponame = ''
     enabled_repos = list()
     local_issues = {}
